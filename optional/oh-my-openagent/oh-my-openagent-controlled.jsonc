@@ -1,0 +1,32 @@
+{
+  // Optional example if you already use oh-my-openagent.
+  // Keep this as reference only; exact keys may change by plugin version.
+  "oh-my-openagent": {
+    "mode": "controlled-workflow-lite",
+    "teamMode": {
+      "enabled": true,
+      "maxMembers": 6,
+      "leadAgent": "sisyphus"
+    },
+    "hooks": {
+      "todo-continuation-enforcer": {
+        "enabled": true,
+        "cooldownMs": 5000,
+        "countdownSeconds": 2,
+        "maxStagnationCount": 3,
+        "maxConsecutiveFailures": 5
+      },
+      "ralph-loop": {
+        "enabled": true,
+        "completionPromise": "<promise>DONE</promise>",
+        "maxIterations": 30
+      }
+    },
+    "guardrails": {
+      "stopWhenWaitingForUser": true,
+      "stopOnPermissionRequired": true,
+      "stopOnTokenLimit": true,
+      "denyDestructiveCommands": true
+    }
+  }
+}

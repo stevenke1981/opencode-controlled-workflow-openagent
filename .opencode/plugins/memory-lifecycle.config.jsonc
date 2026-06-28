@@ -1,0 +1,17 @@
+{
+  // Enable lifecycle memory reminders/audits.
+  "enabled": true,
+
+  // On new sessions, prepare a memory-first reminder.
+  // The plugin attempts to inject this only if your OpenCode SDK exposes a compatible session.chat API.
+  "remindOnSessionCreated": true,
+
+  // Append audit lines when memory_* tools are used.
+  "auditToolUsage": true,
+
+  // Disabled by default to avoid noisy logs. Enable when debugging long autonomous loops.
+  "idleSnapshot": false,
+
+  // Maximum characters of memory digest included in session-created reminder.
+  "maxSnapshotChars": 1800
+}

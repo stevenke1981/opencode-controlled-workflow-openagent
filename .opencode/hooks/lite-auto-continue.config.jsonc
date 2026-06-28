@@ -1,0 +1,28 @@
+{
+  // Lightweight clean-room port of the oh-my-openagent continuation pattern.
+  // Tune these values for your local OpenCode version and risk tolerance.
+  "enabled": true,
+  "countdownSeconds": 2,
+  "cooldownMs": 5000,
+  "maxStagnationCount": 3,
+  "maxConsecutiveFailures": 5,
+  "maxIterations": 30,
+  "completionPromise": "<promise>DONE</promise>",
+  "source": "opencode-controlled-workflow-lite-auto-continue",
+  "skipAgents": [
+    "explore",
+    "librarian",
+    "oracle",
+    "multimodal-looker",
+    "momus",
+    "metis"
+  ],
+  "stopPatterns": [
+    "BLOCKED:",
+    "WAITING_FOR_USER:",
+    "PERMISSION_REQUIRED:",
+    "AUTH_ERROR:",
+    "TOKEN_LIMIT:",
+    "USER_CANCELLED"
+  ]
+}

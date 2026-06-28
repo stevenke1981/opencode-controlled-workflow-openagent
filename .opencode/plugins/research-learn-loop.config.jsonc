@@ -1,0 +1,26 @@
+{
+  // Reference config consumed by research-learn-loop.plugin.ts if you wire it up.
+  "enabled": true,
+  "cooldownMs": 10000,
+  "maxStagnantRounds": 3,
+  "maxFailures": 5,
+  "searchMemoryFirst": true,
+  "requireRollbackPlan": true,
+  "recordSuccess": true,
+  "recordFailure": true,
+  "skills": [
+    "experience-ledger",
+    "research-discovery",
+    "mcp-skill-scout",
+    "community-research",
+    "solution-trial-loop",
+    "self-improvement"
+  ],
+  "memoryFiles": [
+    ".opencode/memory/solution-index.md",
+    ".opencode/memory/success-ledger.md",
+    ".opencode/memory/failure-ledger.md",
+    ".opencode/memory/decision-log.md",
+    ".opencode/memory/patterns.md"
+  ]
+}

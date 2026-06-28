@@ -1,0 +1,108 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+
+  // Replace this with your preferred default model/provider.
+  "model": "openai/gpt-5.5",
+  "autoupdate": true,
+
+  // Safe default permissions. Increase only inside trusted project sandboxes.
+  "permission": {
+    "edit": "ask",
+    "webfetch": "ask",
+    "bash": {
+      "*": "ask",
+      "pwd": "allow",
+      "ls *": "allow",
+      "dir *": "allow",
+      "cat *": "allow",
+      "type *": "allow",
+      "rg *": "allow",
+      "grep *": "allow",
+      "find *": "allow",
+      "git status*": "allow",
+      "git diff*": "allow",
+      "git log*": "allow",
+      "git branch*": "allow",
+      "npm test*": "allow",
+      "npm run test*": "allow",
+      "npm run lint*": "allow",
+      "npm run typecheck*": "allow",
+      "pnpm test*": "allow",
+      "pnpm run lint*": "allow",
+      "bun test*": "allow",
+      "cargo check*": "allow",
+      "cargo test*": "allow",
+      "go test*": "allow",
+      "pytest*": "allow",
+      "python -m pytest*": "allow",
+      "cmake --build*": "allow",
+      "dotnet test*": "allow",
+      "rm *": "deny",
+      "rm -rf *": "deny",
+      "del *": "deny",
+      "rmdir *": "deny",
+      "Remove-Item *": "deny",
+      "git reset --hard*": "deny",
+      "git clean -fd*": "deny",
+      "git push*": "ask"
+    }
+  },
+
+  // OpenCode reads markdown agents from .opencode/agent/*.md.
+  // Keep global default conservative; individual agents define their own boundaries.
+  "agent": {
+    "sisyphus": {
+      "permission": {
+        "edit": "ask",
+        "webfetch": "ask"
+      }
+    },
+    "hephaestus": {
+      "permission": {
+        "edit": "ask",
+        "webfetch": "ask"
+      }
+    },
+    "oracle": {
+      "permission": {
+        "edit": "deny",
+        "webfetch": "ask"
+      }
+    },
+    "explore": {
+      "permission": {
+        "edit": "deny",
+        "webfetch": "deny"
+      }
+    },
+    "librarian": {
+      "permission": {
+        "edit": "deny",
+        "webfetch": "ask"
+      }
+    },
+    "multimodal-looker": {
+      "permission": {
+        "edit": "deny",
+        "webfetch": "deny"
+      }
+    }
+  },
+
+  // Optional MCP servers. Add read-only docs/search MCPs here when available.
+  // Use `opencode mcp add` for interactive setup. Keep mutating MCPs gated.
+  "mcp": {},
+
+
+  // Custom tools are loaded from .opencode/tools/.
+  // This package provides memory_add, memory_search, memory_read, memory_list in .opencode/tools/memory.ts.
+  // Local plugins are auto-loaded from .opencode/plugins/; keep plugin empty unless adding npm plugins.
+
+  // Optional plugins. Local plugin files are placed in .opencode/plugins/.
+  // Both plugins are auto-enabled by the install script; remove entries to disable.
+  "plugin": [
+    ".opencode/plugins/memory-lifecycle.plugin.ts",
+    ".opencode/plugins/research-learn-loop.plugin.ts"
+  ]
+
+}
