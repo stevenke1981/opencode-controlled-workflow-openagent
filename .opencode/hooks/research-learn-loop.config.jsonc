@@ -16,11 +16,11 @@
     "solution-trial-loop",
     "self-improvement"
   ],
-  "memoryFiles": [
-    ".opencode/memory/solution-index.md",
-    ".opencode/memory/success-ledger.md",
-    ".opencode/memory/failure-ledger.md",
-    ".opencode/memory/decision-log.md",
-    ".opencode/memory/patterns.md"
+  "memorySource": "SQLite (.opencode/memory/memory.db)",
+  "memoryTools": [
+    "memory_search",
+    "memory_add",
+    "memory_read",
+    "memory_list"
   ]
 }

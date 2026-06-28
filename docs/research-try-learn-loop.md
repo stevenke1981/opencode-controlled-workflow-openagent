@@ -45,13 +45,16 @@ Agents often fail by repeating the same guess. This loop forces the team to:
 4. Multiple independent community reports with matching version/platform.
 5. Blogs, Reddit, forum posts, AI-generated suggestions.
 
-## Required Records
+## Required Records (SQLite)
 
-- `success-ledger.md`: what worked and when to reuse it.
-- `failure-ledger.md`: what failed and when not to repeat it.
-- `solution-index.md`: compact searchable tags and pointers.
-- `decision-log.md`: chronological attempt history.
-- `patterns.md`: generalized process improvements.
+Use `memory_add` with the appropriate type:
+
+- `type=success`: what worked and when to reuse it (include verification evidence).
+- `type=failure`: what failed and when not to repeat it (include error + root cause).
+- `type=pattern`: generalized process improvements.
+- `type=decision`: chronological attempt history.
+- `type=research`: external sources found.
+- `type=note`: searchable tags and pointers.
 
 ## Good Candidate Fix
 

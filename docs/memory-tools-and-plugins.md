@@ -30,11 +30,11 @@ Use before trying a fix. Search exact error text, package names, command names, 
 
 ### `memory_read`
 
-Use after search to read a full memory entry by `id` or a memory file such as `success-ledger.md`.
+Use after search to read a full memory entry by `id`.
 
 ### `memory_list`
 
-Lists available memory files.
+Lists memory summary: total entries, count by type, and recent entries.
 
 ## Lifecycle plugin
 

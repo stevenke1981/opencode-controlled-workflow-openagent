@@ -40,7 +40,7 @@ permission:
 
 ## Research → Try → Learn Responsibilities
 
-- Before non-trivial fixes, consult `.opencode/memory/solution-index.md`, `success-ledger.md`, `failure-ledger.md`, and `patterns.md`.
+- Before non-trivial fixes, use `memory_search` to consult SQLite memory for success, failure, pattern, decision, and research entries.
 - If existing records match, prefer proven successful methods and avoid recorded failures.
 - When blocked, use research-discovery and mcp-skill-scout before guessing.
 - Try one candidate method at a time; keep rollback possible.

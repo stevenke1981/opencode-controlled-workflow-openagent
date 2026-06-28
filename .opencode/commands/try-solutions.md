@@ -7,4 +7,4 @@ Use the Solution Trial Loop skill.
 
 Task / candidate methods: $ARGUMENTS
 
-Try one method at a time. Record each attempt in `.opencode/memory/decision-log.md`. Keep only changes that pass verification or clearly advance the diagnosis.
+Try one method at a time. Record each attempt with `memory_add type=decision`. Keep only changes that pass verification or clearly advance the diagnosis.

@@ -16,8 +16,8 @@ Load this skill when any of these happen:
 
 Search in this order, stopping when there is enough evidence for 2-5 candidate fixes:
 
-1. **Local success ledger**: `.opencode/memory/success-ledger.md`, `.opencode/memory/solution-index.md`.
-2. **Local failure ledger**: `.opencode/memory/failure-ledger.md` to avoid repeating bad attempts.
+1. **Local success ledger**: `memory_search type=success` for verified fixes.
+2. **Local failure ledger**: `memory_search type=failure` to avoid repeating bad attempts.
 3. **Repo evidence**: README, docs, tests, lockfiles, CI config, examples, source code, comments.
 4. **Installed tool help**: `--help`, `--version`, manpages, local package docs.
 5. **Official docs**: vendor docs, API docs, release notes, migration guides.

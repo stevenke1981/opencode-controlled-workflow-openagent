@@ -18,8 +18,8 @@ Improve records or workflow when:
 
 ## Improvement Targets
 
-- `.opencode/memory/patterns.md`: generalized lessons.
-- `.opencode/memory/solution-index.md`: searchable index and tags.
+- SQLite memory: `memory_add type=pattern` for generalized lessons.
+- SQLite memory: `memory_add type=note` for searchable index and tags.
 - `AGENTS.md`: only if a permanent rule is broadly useful.
 - `.opencode/skills/*/SKILL.md`: only if a repeatable workflow changed.
 - `docs/project-notes.md`: optional project-specific quirks.

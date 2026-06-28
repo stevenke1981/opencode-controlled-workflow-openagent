@@ -130,7 +130,7 @@ session.idle
 
 ## 新增：Research → Try → Learn 自我改進層
 
-這版新增一組 workflow skills 與 memory ledgers：
+這版新增一組 workflow skills 與 SQLite 記憶系統：
 
 ```text
 .opencode/skills/
@@ -142,12 +142,10 @@ session.idle
 └── self-improvement/SKILL.md
 
 .opencode/memory/
-├── solution-index.md
-├── success-ledger.md
+├── memory.db           ← SQLite 資料庫（主要儲存）
+├── success-ledger.md   ← 保留為人類可讀快照
 ├── failure-ledger.md
-├── decision-log.md
-├── patterns.md
-└── research-sources.md
+├── ...
 ```
 
 新增指令：
@@ -181,23 +179,25 @@ session.idle
 - MCP 若能改檔、發 PR、改 issue、碰雲端或資料庫，必須得到明確授權。
 - 社群答案只能當候選方法，本地驗證通過後才記入成功紀錄。
 
-## 新增：Persistent Memory Tools + Lifecycle Plugin
+## SQLite 記憶系統（取代舊版 Markdown Ledgers）
 
-這版把 `.opencode/memory/` 從單純 Markdown ledger 升級成 OpenCode custom tools。進入 OpenCode 後，agent 可以直接呼叫：
+記憶系統使用 **SQLite**（`sql.js` WASM，無原生相依）取代舊的分散式 Markdown 檔案。進入 OpenCode 後，agent 可以直接呼叫：
 
 ```text
-memory_search  # 搜尋過去成功/失敗/決策/研究紀錄
-memory_read    # 讀取指定記憶 entry 或 ledger 檔
+memory_search  # SQLite 全文搜尋成功/失敗/決策/研究紀錄
+memory_read    # 依 id 讀取完整記憶 entry
 memory_add     # 新增成功、失敗、模式、決策、研究來源、備註
-memory_list    # 列出記憶檔案
+memory_list    # 列出記憶庫摘要（總數、類型分佈、最近 5 筆）
 ```
 
-新增檔案：
+核心檔案：
 
 ```text
-.opencode/tools/memory.ts
+.opencode/tools/memory.ts         ← SQLite 版記憶工具
+.opencode/tools/memory-db.ts      ← 共享資料庫模組
+.opencode/tools/migrate-to-sqlite.ts  ← 從 Markdown 遷移到 SQLite
+.opencode/memory/memory.db        ← SQLite 資料庫
 .opencode/plugins/memory-lifecycle.plugin.ts
-.opencode/plugins/memory-lifecycle.config.jsonc
 .opencode/skills/persistent-memory/SKILL.md
 docs/memory-tools-and-plugins.md
 ```

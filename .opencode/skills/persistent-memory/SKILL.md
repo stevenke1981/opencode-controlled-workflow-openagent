@@ -8,8 +8,8 @@ Before trying a fix:
 
 1. Call `memory_search` with the exact error text, package name, command, file path, or concept.
 2. Read the most relevant result with `memory_read`.
-3. Prefer verified entries from `success-ledger.md` and reusable rules from `patterns.md`.
-4. Check `failure-ledger.md` to avoid repeating failed attempts.
+3. Prefer verified entries (`type=success`) and reusable rules (`type=pattern`).
+4. Check failure entries (`type=failure`) to avoid repeating failed attempts.
 
 ## Recording rule
 

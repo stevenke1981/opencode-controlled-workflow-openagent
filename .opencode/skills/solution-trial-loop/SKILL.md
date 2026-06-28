@@ -17,7 +17,7 @@ Use this skill after Research Discovery has produced multiple possible methods. 
 
 ## Attempt Record
 
-Append to `.opencode/memory/decision-log.md` during the session:
+Call `memory_add type=decision` during the session:
 
 ```markdown
 ### Attempt: <short name>
