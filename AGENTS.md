@@ -106,12 +106,13 @@ Intake -> Scope -> Plan -> Implement -> Verify -> Review -> Final Evidence
 
 ### Memory First
 
-任何非平凡修復前，先搜尋：
+任何非平凡修復前，先呼叫 `memory_search` 查詢 SQLite 記憶庫：
 
-- `.opencode/memory/solution-index.md`
-- `.opencode/memory/success-ledger.md`
-- `.opencode/memory/failure-ledger.md`
-- `.opencode/memory/patterns.md`
+```text
+memory_search query="exact error, package name, or command"
+memory_search query="..." type=failure
+memory_search query="..." tags=["windows","cmake"]
+```
 
 若找到成功紀錄，先判斷是否符合目前 repo、平台、版本與錯誤訊息；符合才重用。若找到失敗紀錄，明確避免重複相同方法。
 
@@ -140,10 +141,11 @@ Intake -> Scope -> Plan -> Implement -> Verify -> Review -> Final Evidence
 
 任務結束前更新經驗紀錄：
 
-- 成功方法 → `success-ledger.md` + `solution-index.md`
-- 失敗方法 → `failure-ledger.md`
-- 重要決策 → `decision-log.md`
-- 可泛化規則 → `patterns.md`
+- 成功方法 → `memory_add type=success`，必須包含驗證證據
+- 嘗試失敗 → `memory_add type=failure`，必須包含錯誤訊息與失敗原因
+- 可泛化規則 → `memory_add type=pattern`
+- 官方文件、GitHub issue、社群、MCP、skill 發現 → `memory_add type=research`
+- 重要取捨 → `memory_add type=decision`
 
 禁止把 secrets、token、私有資料、完整專有 log 寫入記錄。
 
@@ -153,10 +155,10 @@ Intake -> Scope -> Plan -> Implement -> Verify -> Review -> Final Evidence
 
 ### Available memory tools
 
-- `memory_search`：搜尋 `.opencode/memory/` 中的成功、失敗、決策、研究與模式紀錄。
-- `memory_read`：讀取搜尋結果的完整 entry 或 ledger 檔。
-- `memory_add`：新增可重用經驗。
-- `memory_list`：列出可讀取的記憶檔案。
+- `memory_search`：以 SQLite 全文搜尋成功、失敗、決策、研究與模式紀錄。
+- `memory_read`：讀取搜尋結果的完整 entry。
+- `memory_add`：新增可重用經驗到 SQLite 資料庫。
+- `memory_list`：列出記憶庫摘要（總數、類型分佈、最近 5 筆）。
 
 ### Memory-first rule
 

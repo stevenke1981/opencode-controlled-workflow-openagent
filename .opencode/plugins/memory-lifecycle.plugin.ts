@@ -1,8 +1,11 @@
 import type { Plugin } from "@opencode-ai/plugin"
-import { mkdir, appendFile, readFile, readdir, stat } from "node:fs/promises"
+import { appendFile, readFile } from "node:fs/promises"
 import path from "node:path"
+import { getDatabase, MEMORY_ROOT } from "../tools/memory-db"
+import type { ToolContext } from "../tools/memory-db"
 
-const MEMORY_ROOT = ".opencode/memory"
+// ─── Config ───────────────────────────────────────────────────────────
+
 const CONFIG_PATH = ".opencode/plugins/memory-lifecycle.config.jsonc"
 
 type Cfg = {
@@ -21,10 +24,8 @@ const DEFAULT_CFG: Cfg = {
   maxSnapshotChars: 1800,
 }
 
-function stripJsonc(input: string) {
-  return input
-    .replace(/\/\/.*$/gm, "")
-    .replace(/\/\*[\s\S]*?\*\//g, "")
+function stripJsonc(input: string): string {
+  return input.replace(/\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "")
 }
 
 async function readConfig(directory: string): Promise<Cfg> {
@@ -36,61 +37,73 @@ async function readConfig(directory: string): Promise<Cfg> {
   }
 }
 
-async function ensure(root: string) {
-  await mkdir(root, { recursive: true })
-  await mkdir(path.join(root, "entries"), { recursive: true })
-}
-
-function now() {
+function now(): string {
   return new Date().toISOString()
 }
 
-async function latestMemoryDigest(root: string, maxChars: number) {
-  const files = ["solution-index.md", "success-ledger.md", "failure-ledger.md", "patterns.md"]
-  const chunks: string[] = []
-  for (const file of files) {
-    try {
-      const text = await readFile(path.join(root, file), "utf8")
-      chunks.push(`## ${file}\n${text.slice(Math.max(0, text.length - Math.floor(maxChars / files.length)))}`)
-    } catch {
-      // ignore missing files
+// ─── SQLite memory digest ────────────────────────────────────────────
+
+async function latestMemoryDigest(root: string, maxChars: number): Promise<string> {
+  try {
+    const d = await getDatabase({ worktree: root } as ToolContext)
+    const stmt = d.prepare("SELECT type, title, substr(problem || ' ' || context || ' ' || solution, 1, 200) AS excerpt FROM memories ORDER BY created_at DESC LIMIT 8")
+    const lines: string[] = ["## Recent Memory Entries (top 8)"]
+    while (stmt.step()) {
+      const r = stmt.getAsObject() as { type: string; title: string; excerpt: string }
+      lines.push(`- [${r.type}] ${r.title}`)
+      if (r.excerpt) lines.push(`  ${r.excerpt.slice(0, 120)}`)
     }
+    stmt.free()
+    const text = lines.join("\n")
+    return text.length > maxChars ? text.slice(0, maxChars) + "…" : text
+  } catch {
+    return "## Recent Memory Entries\n(none yet — use memory_add to build the database)"
   }
-  return chunks.join("\n\n").slice(-maxChars)
 }
 
 async function appendAudit(root: string, message: string) {
-  await appendFile(path.join(root, "tool-audit.md"), `\n- ${now()} ${message}\n`, "utf8")
+  try {
+    await appendFile(path.join(root, "tool-audit.md"), `\n- ${now()} ${message}\n`, "utf8")
+  } catch {
+    // Ignore audit failures
+  }
 }
 
 function getSessionID(input: any): string | undefined {
   return input?.sessionID || input?.session?.id || input?.id || input?.message?.sessionID
 }
 
+// ─── Plugin ───────────────────────────────────────────────────────────
+
 export const MemoryLifecyclePlugin: Plugin = async ({ directory, client }) => {
   const cfg = await readConfig(directory)
   const root = path.join(directory, MEMORY_ROOT)
   if (!cfg.enabled) return {}
-  await ensure(root)
+
+  // Initialize SQLite database on first load
+  try {
+    await getDatabase({ worktree: directory } as ToolContext)
+    await appendAudit(root, "plugin.initialized sqlite ready")
+  } catch (error) {
+    await appendAudit(root, `plugin.initialization error: ${(error as Error).message}`)
+  }
 
   return {
     "session.created": async (input: any) => {
       if (!cfg.remindOnSessionCreated) return
       const sessionID = getSessionID(input)
       const digest = await latestMemoryDigest(root, cfg.maxSnapshotChars)
-      await appendAudit(root, `session.created ${sessionID || "unknown"}; memory digest prepared`)
+      await appendAudit(root, `session.created ${sessionID || "unknown"}; sqlite digest prepared`)
 
-      // Defensive reference implementation: OpenCode SDK method names can vary by version.
-      // If your local SDK supports client.session.chat or promptAsync, this can inject a reminder.
       const reminder = [
-        "[MEMORY-FIRST REMINDER]",
-        "Before changing code, call memory_search for similar errors, commands, packages, and past successful fixes.",
+        "[MEMORY-FIRST REMINDER] (SQLite)",
+        "Before changing code, run memory_search for similar errors, commands, packages, and past successful fixes.",
         "After a verified fix, call memory_add type=success. After a failed attempt, call memory_add type=failure.",
-        digest ? `\nRecent memory digest:\n${digest}` : "",
+        digest ? `\n${digest}` : "",
       ].join("\n")
 
       try {
-        const anyClient: any = client as any
+        const anyClient: any = client
         if (sessionID && anyClient?.session?.chat) {
           await anyClient.session.chat({ path: { id: sessionID }, body: { parts: [{ type: "text", text: reminder }] } })
         }
@@ -112,20 +125,13 @@ export const MemoryLifecyclePlugin: Plugin = async ({ directory, client }) => {
         await appendAudit(root, `session.idle ${sessionID || "unknown"}; snapshot disabled`)
         return
       }
-      await appendFile(
-        path.join(root, "decision-log.md"),
-        `\n## Idle Snapshot ${now()}\n\n- session: ${sessionID || "unknown"}\n- next action: If todos remain, run memory_search before trying another solution.\n\n---\n`,
-        "utf8",
-      )
+      // Idle snapshot writes to audit log for record
+      await appendAudit(root, `session.idle ${sessionID || "unknown"}; further actions: check todos, run memory_search before retry`)
     },
 
     "session.compacted": async (input: any) => {
       const sessionID = getSessionID(input)
-      await appendFile(
-        path.join(root, "decision-log.md"),
-        `\n## Context Compacted ${now()}\n\n- session: ${sessionID || "unknown"}\n- action: Preserve important facts with memory_add if not already captured.\n\n---\n`,
-        "utf8",
-      )
+      await appendAudit(root, `session.compacted ${sessionID || "unknown"}; preserve important facts with memory_add`)
     },
   }
 }
