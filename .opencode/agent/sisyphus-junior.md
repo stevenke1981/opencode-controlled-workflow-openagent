@@ -2,7 +2,7 @@
 description: Scoped executor for one category of work such as docs, tests, refactor cleanup, or config updates.
 mode: subagent
 permission:
-  edit: ask
+  edit: allow
   webfetch: ask
   bash:
     "git status*": allow

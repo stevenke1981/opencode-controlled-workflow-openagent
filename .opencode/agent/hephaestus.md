@@ -2,7 +2,7 @@
 description: Autonomous implementation worker for deep coding tasks, minimal changes, verification, and durable fixes.
 mode: subagent
 permission:
-  edit: ask
+  edit: allow
   webfetch: ask
   bash:
     "git status*": allow

@@ -2,7 +2,7 @@
 description: Todo orchestrator that executes a known checklist item by item, keeps state accurate, and verifies completion.
 mode: subagent
 permission:
-  edit: ask
+  edit: allow
   webfetch: ask
   bash:
     "git status*": allow

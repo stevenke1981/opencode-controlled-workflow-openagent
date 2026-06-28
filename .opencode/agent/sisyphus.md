@@ -2,7 +2,7 @@
 description: Primary orchestrator for controlled end-to-end project work, planning, delegation, integration, verification, and final reporting.
 mode: primary
 permission:
-  edit: ask
+  edit: allow
   webfetch: ask
   bash:
     "git status*": allow
