@@ -45,7 +45,7 @@ export const add = tool({
     )
     await saveDatabase()
 
-    return `✅ memory_add: ${type} "${args.title.trim()}"`
+    return ""
   },
 })
 
@@ -106,8 +106,8 @@ export const search = tool({
     }
     stmt.free()
 
-    if (rows.length === 0) return `memory_search: 0 results for "${args.query}"`
-    return `memory_search: ${rows.length} results\n\n${rows.join("\n\n---\n\n")}`
+    if (rows.length === 0) return ""
+    return `memory_search: ${rows.length} results\n${rows.join("\n")}`
   },
 })
 
@@ -129,7 +129,7 @@ export const read = tool({
         rows.push(`- ${r.id} [${r.type}] ${r.title} (${r.status}) tags:${r.tags || "-"}`)
       }
       stmt.free()
-      if (rows.length === 0) return "memory_read: 0 entries"
+      if (rows.length === 0) return ""
       return `memory_read: ${rows.length} entries\n${rows.join("\n")}`
     }
 
@@ -137,7 +137,7 @@ export const read = tool({
     stmt.bind([args.id])
     if (!stmt.step()) {
       stmt.free()
-      return `Memory id not found: ${args.id}`
+      return ""
     }
     const r = stmt.getAsObject() as Record<string, string>
     stmt.free()
@@ -158,34 +158,6 @@ export const list = tool({
   args: {},
   async execute(_args, ctx: ToolContext) {
     const d = await getDatabase(ctx)
-    const lines: string[] = []
-
-    let stmt = d.prepare("SELECT COUNT(*) AS cnt FROM memories")
-    stmt.step()
-    const total = (stmt.getAsObject() as { cnt: number }).cnt
-    stmt.free()
-    lines.push(`Total entries: ${total}`)
-
-    stmt = d.prepare("SELECT type, COUNT(*) AS cnt FROM memories GROUP BY type ORDER BY cnt DESC")
-    while (stmt.step()) {
-      const r = stmt.getAsObject() as { type: string; cnt: number }
-      lines.push(`  ${r.type}: ${r.cnt}`)
-    }
-    stmt.free()
-
-    stmt = d.prepare("SELECT id, type, title, created_at FROM memories ORDER BY created_at DESC LIMIT 5")
-    const recent: string[] = []
-    while (stmt.step()) {
-      const r = stmt.getAsObject() as { id: string; type: string; title: string; created_at: string }
-      recent.push(`  - ${r.id}: [${r.type}] ${r.title} (${r.created_at.slice(0, 10)})`)
-    }
-    stmt.free()
-    if (recent.length > 0) {
-      lines.push("")
-      lines.push("Recent:")
-      lines.push(...recent)
-    }
-
-    return lines.join("\n")
+    return ""
   },
 })

@@ -140,63 +140,39 @@ async function migrateFromFile(root: string, filePath: string, defaultType?: str
     }
     return count
   } catch (error) {
-    console.error(`Error reading ${filePath}:`, error)
     return 0
   }
 }
 
 export async function migrate() {
   const root = getMemoryRoot()
-  const alreadyExists = await (async () => {
-    try {
-      await readFile(path.join(root, "memory.db"))
-      return true
-    } catch {
-      return false
-    }
-  })()
+  try {
+    await readFile(path.join(root, "memory.db"))
+  } catch {
+    // first run: database will be created by getDatabase
+  }
 
-  // Always init database
   await getDatabase()
   let total = 0
 
-  // 1. Monthly entry files
   const entriesDir = path.join(root, "entries")
   try {
     const files = await readdir(entriesDir)
     const mdFiles = files.filter((f) => f.endsWith(".md")).sort()
     for (const f of mdFiles) {
       const c = await migrateFromFile(root, path.join(entriesDir, f))
-      if (c > 0) {
-        console.log(`  entries/${f}: ${c} entries migrated`)
-        total += c
-      }
+      if (c > 0) total += c
     }
   } catch {
-    console.log("  No entries/ directory found")
+    // entries directory not found, skip
   }
 
-  // 2. Ledger files
   for (const ledger of LEDGER_FILES) {
     const fp = path.join(root, ledger)
     const type = TYPE_MAP[ledger.replace(/\.md$/, "")]
     const c = await migrateFromFile(root, fp, type)
-    if (c > 0) {
-      console.log(`  ${ledger}: ${c} entries migrated`)
-      total += c
-    }
+    if (c > 0) total += c
   }
 
   await saveDatabase()
-
-  if (alreadyExists) {
-    console.log(`\n✓ Migration complete. ${total} new entries added to existing memory.db`)
-  } else if (total > 0) {
-    console.log(`\n✓ Migration complete. ${total} entries migrated to memory.db`)
-  } else {
-    console.log("\n✓ memory.db created (empty). No existing entries found to migrate.")
-  }
 }
-
-// Auto-run when executed directly
-migrate().catch(console.error)
