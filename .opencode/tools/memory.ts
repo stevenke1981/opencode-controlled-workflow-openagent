@@ -45,13 +45,7 @@ export const add = tool({
     )
     await saveDatabase()
 
-    return [
-      `Memory added: ${id}`,
-      `Type: ${type}`,
-      `Title: ${args.title.trim()}`,
-      `Tags: ${tags || "(none)"}`,
-      `Database: ${getMemoryRoot(ctx)}${path.sep}${DB_FILE}`,
-    ].join("\n")
+    return `✅ memory_add: ${type} "${args.title.trim()}"`
   },
 })
 
@@ -108,17 +102,12 @@ export const search = tool({
         id: string; type: string; title: string; excerpt: string
         tags: string; status: string; source: string; created_at: string
       }
-      rows.push([
-        `### ${r.title}`,
-        `  id: ${r.id} | type: ${r.type} | status: ${r.status}`,
-        `  tags: ${r.tags || "(none)"}`,
-        `  ${(r.excerpt || "").slice(0, 300)}`,
-      ].join("\n"))
+      rows.push(`- [${r.type}] ${r.title}  (${r.id})`)
     }
     stmt.free()
 
-    if (rows.length === 0) return `No SQLite memory results for: ${args.query}`
-    return `Found ${rows.length} result(s):\n\n${rows.join("\n\n---\n\n")}`
+    if (rows.length === 0) return `memory_search: 0 results for "${args.query}"`
+    return `memory_search: ${rows.length} results\n\n${rows.join("\n\n---\n\n")}`
   },
 })
 
@@ -140,8 +129,8 @@ export const read = tool({
         rows.push(`- ${r.id} [${r.type}] ${r.title} (${r.status}) tags:${r.tags || "-"}`)
       }
       stmt.free()
-      if (rows.length === 0) return "No memory entries yet."
-      return `Memory entries (${rows.length} shown):\n\n${rows.join("\n")}`
+      if (rows.length === 0) return "memory_read: 0 entries"
+      return `memory_read: ${rows.length} entries\n${rows.join("\n")}`
     }
 
     const stmt = d.prepare("SELECT * FROM memories WHERE id = ?")
@@ -158,9 +147,9 @@ export const read = tool({
       .filter((f) => r[f])
       .map((f) => {
         const val = r[f].length > maxChars ? r[f].slice(0, maxChars) + "…" : r[f]
-        return `### ${f}\n${val}`
+        return `${f}: ${val}`
       })
-    return lines.join("\n\n")
+    return lines.join("\n")
   },
 })
 
@@ -193,14 +182,9 @@ export const list = tool({
     stmt.free()
     if (recent.length > 0) {
       lines.push("")
-      lines.push("Recent 5 entries:")
+      lines.push("Recent:")
       lines.push(...recent)
     }
-
-    const dbSize = d.export().length
-    lines.push("")
-    lines.push(`Database: ${DB_FILE} (${(dbSize / 1024).toFixed(1)} KB)`)
-    lines.push(`Location: ${getMemoryRoot(ctx)}${path.sep}${DB_FILE}`)
 
     return lines.join("\n")
   },

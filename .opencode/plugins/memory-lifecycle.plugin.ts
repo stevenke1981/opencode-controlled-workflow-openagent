@@ -41,26 +41,6 @@ function now(): string {
   return new Date().toISOString()
 }
 
-// ─── SQLite memory digest ────────────────────────────────────────────
-
-async function latestMemoryDigest(root: string, maxChars: number): Promise<string> {
-  try {
-    const d = await getDatabase({ worktree: root } as ToolContext)
-    const stmt = d.prepare("SELECT type, title, substr(problem || ' ' || context || ' ' || solution, 1, 200) AS excerpt FROM memories ORDER BY created_at DESC LIMIT 8")
-    const lines: string[] = ["## Recent Memory Entries (top 8)"]
-    while (stmt.step()) {
-      const r = stmt.getAsObject() as { type: string; title: string; excerpt: string }
-      lines.push(`- [${r.type}] ${r.title}`)
-      if (r.excerpt) lines.push(`  ${r.excerpt.slice(0, 120)}`)
-    }
-    stmt.free()
-    const text = lines.join("\n")
-    return text.length > maxChars ? text.slice(0, maxChars) + "…" : text
-  } catch {
-    return "## Recent Memory Entries\n(none yet — use memory_add to build the database)"
-  }
-}
-
 async function appendAudit(root: string, message: string) {
   try {
     await appendFile(path.join(root, "tool-audit.md"), `\n- ${now()} ${message}\n`, "utf8")
@@ -75,7 +55,7 @@ function getSessionID(input: any): string | undefined {
 
 // ─── Plugin ───────────────────────────────────────────────────────────
 
-export const MemoryLifecyclePlugin: Plugin = async ({ directory, client }) => {
+export const MemoryLifecyclePlugin: Plugin = async ({ directory }) => {
   const cfg = await readConfig(directory)
   const root = path.join(directory, MEMORY_ROOT)
   if (!cfg.enabled) return {}
@@ -90,26 +70,10 @@ export const MemoryLifecyclePlugin: Plugin = async ({ directory, client }) => {
 
   return {
     "session.created": async (input: any) => {
-      if (!cfg.remindOnSessionCreated) return
+      // Memory-first reminder is already in agent prompts.
+      // Only log to audit file for traceability.
       const sessionID = getSessionID(input)
-      const digest = await latestMemoryDigest(root, cfg.maxSnapshotChars)
-      await appendAudit(root, `session.created ${sessionID || "unknown"}; sqlite digest prepared`)
-
-      const reminder = [
-        "[MEMORY-FIRST REMINDER] (SQLite)",
-        "Before changing code, run memory_search for similar errors, commands, packages, and past successful fixes.",
-        "After a verified fix, call memory_add type=success. After a failed attempt, call memory_add type=failure.",
-        digest ? `\n${digest}` : "",
-      ].join("\n")
-
-      try {
-        const anyClient: any = client
-        if (sessionID && anyClient?.session?.chat) {
-          await anyClient.session.chat({ path: { id: sessionID }, body: { parts: [{ type: "text", text: reminder }] } })
-        }
-      } catch (error) {
-        await appendAudit(root, `session.created reminder skipped: ${(error as Error).message}`)
-      }
+      await appendAudit(root, `session.created ${sessionID || "unknown"}; reminder in agent prompt`)
     },
 
     "tool.execute.after": async (input: any, output: any) => {
