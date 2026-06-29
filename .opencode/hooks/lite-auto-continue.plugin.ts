@@ -47,7 +47,7 @@ const DEFAULT_CONFIG: HookConfig = {
   maxIterations: 30,
   completionPromise: '<promise>DONE</promise>',
   source: 'opencode-controlled-workflow-lite-auto-continue',
-  skipAgents: ['explore', 'librarian', 'oracle', 'multimodal-looker', 'momus', 'metis'],
+  skipAgents: ['explore', 'librarian', 'merlin', 'multimodal-looker', 'solomon', 'athena'],
   stopPatterns: ['BLOCKED:', 'WAITING_FOR_USER:', 'PERMISSION_REQUIRED:', 'AUTH_ERROR:', 'TOKEN_LIMIT:', 'USER_CANCELLED'],
 }
 
@@ -113,7 +113,7 @@ export default function liteAutoContinuePlugin(ctx: any) {
       state.lastAt = Date.now()
       state.iteration += 1
       await injectPrompt(ctx.client, sessionID, {
-        agent: run.agent ?? 'sisyphus',
+        agent: run.agent ?? 'odin',
         model: run.model,
         tools: run.tools,
         source: config.source,
@@ -183,7 +183,7 @@ function lastRunInfo(messages: Message[]) {
     const m = messages[i]
     if (m.agent || m.model || m.tools) return { agent: m.agent, model: m.model, tools: m.tools }
   }
-  return { agent: 'sisyphus', model: undefined, tools: undefined }
+  return { agent: 'odin', model: undefined, tools: undefined }
 }
 
 function buildContinuationPrompt(incomplete: Todo[], promise: string): string {

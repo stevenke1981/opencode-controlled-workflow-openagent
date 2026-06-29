@@ -6,7 +6,7 @@
     "teamMode": {
       "enabled": true,
       "maxMembers": 6,
-      "leadAgent": "sisyphus"
+      "leadAgent": "odin"
     },
     "hooks": {
       "todo-continuation-enforcer": {

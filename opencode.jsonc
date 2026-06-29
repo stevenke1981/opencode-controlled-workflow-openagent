@@ -27,7 +27,7 @@
   // OpenCode reads markdown agents from .opencode/agent/*.md.
   // Keep global default conservative; individual agents define their own boundaries.
   "agent": {
-    "sisyphus": {
+    "odin": {
       "permission": {
         "edit": "ask",
         "webfetch": "ask"
@@ -39,7 +39,7 @@
         "webfetch": "ask"
       }
     },
-    "oracle": {
+    "merlin": {
       "permission": {
         "edit": "deny",
         "webfetch": "ask"

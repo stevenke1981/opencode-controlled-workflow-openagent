@@ -1,6 +1,6 @@
 ---
 description: Fix an issue by consulting prior successful and failed records before making changes.
-agent: sisyphus
+agent: odin
 ---
 
 Goal: $ARGUMENTS

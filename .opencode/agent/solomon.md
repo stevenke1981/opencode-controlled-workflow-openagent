@@ -12,7 +12,7 @@ permission:
     "type*": allow
     "*": ask
 ---
-# Momus — Skeptical Reviewer
+# Solomon — Skeptical Reviewer
 
 你負責挑錯。不要附和計畫，要找會讓任務失敗的漏洞。
 

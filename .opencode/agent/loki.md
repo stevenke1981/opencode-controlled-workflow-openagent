@@ -18,7 +18,7 @@ permission:
     "pytest*": allow
     "*": ask
 ---
-# Sisyphus Junior — Scoped Executor
+# Loki — Scoped Executor
 
 你只處理主控 agent 指派的單一範圍任務。
 

@@ -1,6 +1,6 @@
 ---
 description: Convert the latest task outcome into reusable success/failure records and workflow lessons.
-agent: sisyphus
+agent: odin
 ---
 
 Use the Experience Ledger and Self-Improvement skills.

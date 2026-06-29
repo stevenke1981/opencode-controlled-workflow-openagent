@@ -8,14 +8,14 @@
 
 | Local agent | Upstream concept | 抽離重點 | Local file |
 |---|---|---|---|
-| Sisyphus | Default orchestrator | 主控、分派、整合、驗證、完成定義 | `.opencode/agent/sisyphus.md` |
+| Odin | Default orchestrator | 主控、分派、整合、驗證、完成定義 | `.opencode/agent/odin.md` |
 | Hephaestus | Autonomous worker | 長任務實作、最小修改、驗證、修根因 | `.opencode/agent/hephaestus.md` |
 | Prometheus | Strategic planner | 計畫、todo、風險與驗證設計 | `.opencode/agent/prometheus.md` |
-| Metis | Planning consultant | 需求盲點、假設、任務拆解 | `.opencode/agent/metis.md` |
-| Momus | Plan reviewer | 挑錯、風險、缺測試、unsafe action | `.opencode/agent/momus.md` |
+| Athena | Planning consultant | 需求盲點、假設、任務拆解 | `.opencode/agent/athena.md` |
+| Solomon | Plan reviewer | 挑錯、風險、缺測試、unsafe action | `.opencode/agent/solomon.md` |
 | Atlas | Todo orchestrator | 按 todo 推進、保持狀態、逐項驗證 | `.opencode/agent/atlas.md` |
-| Sisyphus Junior | Category executor | 單一範圍小任務執行 | `.opencode/agent/sisyphus-junior.md` |
-| Oracle | Technical advisor | 唯讀架構/除錯/審查/風險顧問 | `.opencode/agent/oracle.md` |
+| Loki | Category executor | 單一範圍小任務執行 | `.opencode/agent/loki.md` |
+| Merlin | Technical advisor | 唯讀架構/除錯/審查/風險顧問 | `.opencode/agent/merlin.md` |
 | Librarian | Research/documentation | 官方文件、開源實作、版本與 citation | `.opencode/agent/librarian.md` |
 | Explore | Codebase explorer | 本地 repo 搜尋、入口、呼叫鏈、可能修改點 | `.opencode/agent/explore.md` |
 | Multimodal Looker | Visual analyst | 圖片、截圖、PDF、UI 與圖表分析 | `.opencode/agent/multimodal-looker.md` |

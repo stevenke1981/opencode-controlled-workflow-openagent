@@ -1,6 +1,6 @@
 ---
 description: Research official/community/MCP sources, propose candidate fixes, then try them one by one with evidence.
-agent: sisyphus
+agent: odin
 ---
 
 Use the Research Discovery, MCP + Skill Scout, Community Research, Solution Trial Loop, and Experience Ledger skills.

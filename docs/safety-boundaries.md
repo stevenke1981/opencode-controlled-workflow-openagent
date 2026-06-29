@@ -35,16 +35,16 @@ Auto continue 很容易失控，所以本包預設採安全權限。
 唯讀角色：
 - Explore
 - Librarian
-- Oracle
-- Metis
-- Momus
+- Merlin
+- Athena
+- Solomon
 - Multimodal Looker
 
 可改檔角色：
-- Sisyphus
+- Odin
 - Hephaestus
 - Atlas
-- Sisyphus Junior
+- Loki
 
 ## Stop patterns
 

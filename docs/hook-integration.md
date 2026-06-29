@@ -25,7 +25,7 @@ session.idle event
 - stagnation：相同 todo 多輪無進展時停止。
 - failure counter：連續注入失敗達上限停止。
 - max iterations：避免無限 loop。
-- skip read-only agents：Explore/Librarian/Oracle/Momus/Metis 等唯讀角色不自動推進。
+- skip read-only agents：Explore/Librarian/Merlin/Solomon/Athena 等唯讀角色不自動推進。
 - stop patterns：遇到 `BLOCKED:`、`PERMISSION_REQUIRED:`、`TOKEN_LIMIT:` 等停止。
 - waiting-for-user detection：看到需要使用者確認時停止。
 

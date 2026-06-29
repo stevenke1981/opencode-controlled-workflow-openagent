@@ -56,8 +56,8 @@ Intake -> Scope -> Plan -> Implement -> Verify -> Review -> Final Evidence
 ### Review
 
 - 自我審查 diff。
-- 請 Oracle/Reviewer 檢查架構、風險、範圍外行為。
-- 請 Momus 檢查 plan 是否真的完成。
+- 請 Merlin/Reviewer 檢查架構、風險、範圍外行為。
+- 請 Solomon 檢查 plan 是否真的完成。
 
 ### Final Evidence
 
@@ -70,14 +70,14 @@ Intake -> Scope -> Plan -> Implement -> Verify -> Review -> Final Evidence
 
 ## Agent Routing
 
-- `sisyphus`：主控、分派、整合、最終交付。
+- `odin`：主控、分派、整合、最終交付。
 - `hephaestus`：深度實作，一個目標做到可驗證。
 - `prometheus`：需求不清或大型任務前的訪談式規劃。
-- `metis`：前置風險與隱含需求分析。
-- `momus`：計畫審查與完成度質疑。
+- `athena`：前置風險與隱含需求分析。
+- `solomon`：計畫審查與完成度質疑。
 - `atlas`：已確認 todo 的穩定執行者。
-- `sisyphus-junior`：被分派的單一類別執行者，不能再分派。
-- `oracle`：唯讀架構/除錯/安全/效能顧問。
+- `loki`：被分派的單一類別執行者，不能再分派。
+- `merlin`：唯讀架構/除錯/安全/效能顧問。
 - `librarian`：外部文件、開源實作、版本差異調查。
 - `explore`：本地 codebase 搜尋與關聯定位，唯讀。
 - `multimodal-looker`：圖片、PDF、截圖、圖表的唯讀分析。

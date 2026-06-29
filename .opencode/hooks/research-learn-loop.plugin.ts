@@ -127,7 +127,7 @@ export default async function ResearchLearnLoopPlugin(ctx: any) {
         await ctx.client.session.promptAsync({
           path: { id: sessionID },
           body: {
-            agent: last.agent ?? 'sisyphus',
+            agent: last.agent ?? 'odin',
             model: last.model,
             tools: last.tools,
             parts: [{ type: 'text', text: prompt }],

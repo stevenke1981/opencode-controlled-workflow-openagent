@@ -28,14 +28,14 @@
 │   └── safety-boundaries.md
 ├── .opencode/
 │   ├── agent/
-│   │   ├── sisyphus.md
+│   │   ├── odin.md
 │   │   ├── hephaestus.md
 │   │   ├── prometheus.md
-│   │   ├── metis.md
-│   │   ├── momus.md
+│   │   ├── athena.md
+│   │   ├── solomon.md
 │   │   ├── atlas.md
-│   │   ├── sisyphus-junior.md
-│   │   ├── oracle.md
+│   │   ├── loki.md
+│   │   ├── merlin.md
 │   │   ├── librarian.md
 │   │   ├── explore.md
 │   │   └── multimodal-looker.md

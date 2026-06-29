@@ -7,9 +7,9 @@
 
 Expected behavior:
 
-1. Sisyphus creates todos.
+1. Odin creates todos.
 2. Explore locates Cargo.toml, src entrypoints, tests.
 3. Hephaestus implements fix.
 4. Verify command runs.
-5. Momus/Oracle review if high risk.
+5. Solomon/Merlin review if high risk.
 6. Final answer includes evidence.

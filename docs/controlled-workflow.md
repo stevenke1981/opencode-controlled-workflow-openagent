@@ -5,16 +5,16 @@
 ## 角色分層
 
 ```text
-Sisyphus 主控
+Odin 主控
 ├─ Prometheus：制定計畫
-├─ Metis：補需求盲點
-├─ Momus：審查計畫
+├─ Athena：補需求盲點
+├─ Solomon：審查計畫
 ├─ Explore：本地 repo 搜尋
 ├─ Librarian：外部文件與開源參考
-├─ Oracle：架構/除錯/風險顧問
+├─ Merlin：架構/除錯/風險顧問
 ├─ Hephaestus：深度實作
 ├─ Atlas：todo 執行
-├─ Sisyphus Junior：小範圍執行
+├─ Loki：小範圍執行
 └─ Multimodal Looker：視覺/PDF/UI 分析
 ```
 
@@ -33,8 +33,8 @@ Sisyphus 主控
 
 ### 3. Plan Gate
 - Prometheus 產出階段計畫。
-- Metis 找隱含假設。
-- Momus 審查 todo 是否可驗證。
+- Athena 找隱含假設。
+- Solomon 審查 todo 是否可驗證。
 
 ### 4. Change Gate
 - Hephaestus 或 Atlas 執行。
@@ -47,8 +47,8 @@ Sisyphus 主控
 - 失敗就回到 Change Gate。
 
 ### 6. Review Gate
-- Oracle 檢查架構/副作用。
-- Momus 檢查 plan 是否仍有缺口。
+- Merlin 檢查架構/副作用。
+- Solomon 檢查 plan 是否仍有缺口。
 
 ### 7. Final Gate
 最後回報：

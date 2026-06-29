@@ -12,10 +12,10 @@
   "skipAgents": [
     "explore",
     "librarian",
-    "oracle",
+    "merlin",
     "multimodal-looker",
-    "momus",
-    "metis"
+    "solomon",
+    "athena"
   ],
   "stopPatterns": [
     "BLOCKED:",
