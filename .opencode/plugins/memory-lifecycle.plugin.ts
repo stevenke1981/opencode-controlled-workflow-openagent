@@ -1,9 +1,9 @@
 /**
  * OpenCode Memory Lifecycle Plugin
  *
- * Self-contained: no static dependency on memory-db.ts or sql.js.
- * If SQLite is unavailable, the plugin degrades gracefully (writes audit log, skips eager init).
- * All imports are dynamic and wrapped in try/catch.
+ * Self-contained: no static or dynamic dependency on memory-db.ts or sql.js.
+ * The plugin only logs lifecycle events to the audit file.
+ * Memory database initialization is handled lazily by tools/memory.ts.
  */
 import type { Plugin } from "@opencode-ai/plugin"
 import { appendFile, readFile } from "node:fs/promises"
@@ -67,22 +67,13 @@ function getSessionID(input: any): string | undefined {
 
 export const MemoryLifecyclePlugin: Plugin = async ({ directory }) => {
   const cfg = await readConfig(directory)
-  const root = path.join(directory, MEMORY_ROOT)
   if (!cfg.enabled) return {}
 
-  // Try to eagerly initialize SQLite database (optional: falls back gracefully)
-  try {
-    const dbModule = await import("../tools/memory-db")
-    await dbModule.getDatabase({ worktree: directory })
-    await appendAudit(root, "plugin.initialized sqlite ready")
-  } catch {
-    await appendAudit(root, "plugin.initialized fallback (sql.js unavailable, tools use JSON)")
-  }
+  const root = path.join(directory, MEMORY_ROOT)
+  await appendAudit(root, "plugin.initialized (db init deferred to tools/memory.ts)")
 
   return {
     "session.created": async (input: any) => {
-      // Memory-first reminder is already in agent prompts.
-      // Only log to audit file for traceability.
       const sessionID = getSessionID(input)
       await appendAudit(root, `session.created ${sessionID || "unknown"}; reminder in agent prompt`)
     },
