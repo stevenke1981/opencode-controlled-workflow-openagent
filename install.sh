@@ -61,14 +61,10 @@ MISSING=""
 for f in "memory.ts"; do
   if [ ! -f "$TOOLS_DIR/$f" ]; then MISSING="$MISSING TOOL:$f"; fi
 done
-for f in "memory-db.ts"; do
-  if [ ! -f "$TOOLS_DIR/$f" ]; then MISSING="$MISSING PLUGIN-DEP:$f"; fi
-done
 if [ -n "$MISSING" ]; then
   echo "WARNING: Missing files:$MISSING"
 else
   echo "✓ Tool: memory.ts (self-contained, SQLite/JSON fallback)"
-  echo "✓ Plugin dep: memory-db.ts (shared module for memory-lifecycle.plugin.ts)"
 fi
 
 echo ""
