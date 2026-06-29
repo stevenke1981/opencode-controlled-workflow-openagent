@@ -1,12 +1,20 @@
+/**
+ * OpenCode Memory Lifecycle Plugin
+ *
+ * Self-contained: no static dependency on memory-db.ts or sql.js.
+ * If SQLite is unavailable, the plugin degrades gracefully (writes audit log, skips eager init).
+ * All imports are dynamic and wrapped in try/catch.
+ */
 import type { Plugin } from "@opencode-ai/plugin"
 import { appendFile, readFile } from "node:fs/promises"
 import path from "node:path"
-import { getDatabase, MEMORY_ROOT } from "../tools/memory-db"
-import type { ToolContext } from "../tools/memory-db"
 
-// ─── Config ───────────────────────────────────────────────────────────
+// ─── Constants ────────────────────────────────────────────────────────
 
+const MEMORY_ROOT = ".opencode/memory"
 const CONFIG_PATH = ".opencode/plugins/memory-lifecycle.config.jsonc"
+
+// ─── Types ────────────────────────────────────────────────────────────
 
 type Cfg = {
   enabled: boolean
@@ -23,6 +31,8 @@ const DEFAULT_CFG: Cfg = {
   idleSnapshot: false,
   maxSnapshotChars: 1800,
 }
+
+// ─── Helpers ──────────────────────────────────────────────────────────
 
 function stripJsonc(input: string): string {
   return input.replace(/\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "")
@@ -60,12 +70,13 @@ export const MemoryLifecyclePlugin: Plugin = async ({ directory }) => {
   const root = path.join(directory, MEMORY_ROOT)
   if (!cfg.enabled) return {}
 
-  // Initialize SQLite database on first load
+  // Try to eagerly initialize SQLite database (optional: falls back gracefully)
   try {
-    await getDatabase({ worktree: directory } as ToolContext)
+    const dbModule = await import("../tools/memory-db")
+    await dbModule.getDatabase({ worktree: directory })
     await appendAudit(root, "plugin.initialized sqlite ready")
-  } catch (error) {
-    await appendAudit(root, `plugin.initialization error: ${(error as Error).message}`)
+  } catch {
+    await appendAudit(root, "plugin.initialized fallback (sql.js unavailable, tools use JSON)")
   }
 
   return {
@@ -89,7 +100,6 @@ export const MemoryLifecyclePlugin: Plugin = async ({ directory }) => {
         await appendAudit(root, `session.idle ${sessionID || "unknown"}; snapshot disabled`)
         return
       }
-      // Idle snapshot writes to audit log for record
       await appendAudit(root, `session.idle ${sessionID || "unknown"}; further actions: check todos, run memory_search before retry`)
     },
 
