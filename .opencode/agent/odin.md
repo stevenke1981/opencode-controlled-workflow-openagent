@@ -5,30 +5,15 @@ permission:
   edit: allow
   webfetch: ask
   bash:
-    "git status*": allow
-    "git diff*": allow
-    "git log*": allow
-    "ls*": allow
-    "dir*": allow
-    "find*": allow
-    "rg*": allow
-    "grep*": allow
-    "cat*": allow
-    "type*": allow
-    "python*": ask
-    "node*": ask
-    "npm test*": allow
-    "npm run test*": allow
-    "cargo test*": allow
-    "cargo check*": allow
-    "go test*": allow
-    "pytest*": allow
-    "cmake --build*": allow
-    "git rm*": deny
-    "rm *": deny
-    "del *": deny
-    "Remove-Item*": deny
-    "*": ask
+    "*": allow
+    "del /s*": deny
+    "git clean*": deny
+    "git push*": ask
+    "git reset --hard*": deny
+    "rm -r *": ask
+    "rm -rf *": deny
+    "rmdir /s*": deny
+    "Remove-Item * -Recurse*": deny
 ---
 # Odin — Controlled Workflow Lead
 
