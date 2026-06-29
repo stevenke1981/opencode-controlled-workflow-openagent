@@ -1,20 +1,372 @@
+/**
+ * OpenCode Persistent Memory Tool
+ *
+ * Dual-mode backend:
+ *   1. SQLite via sql.js (primary, faster, full-text search)
+ *   2. JSON file fallback (zero dependencies, always works)
+ *
+ * If sql.js is unavailable, the tool degrades gracefully to JSON storage.
+ * The tool always returns empty strings to avoid cluttering the OpenCode UI.
+ */
 import { tool } from "@opencode-ai/plugin"
 import crypto from "node:crypto"
-import { getDatabase, saveDatabase, getMemoryRoot, DB_FILE, type ToolContext } from "./memory-db"
+import { readFile, writeFile, mkdir } from "node:fs/promises"
+import path from "node:path"
+import fs from "node:fs"
 
 // ─── Types ────────────────────────────────────────────────────────────
 
+export type ToolContext = {
+  directory?: string
+  worktree?: string
+  sessionID?: string
+  messageID?: string
+  agent?: string
+}
+
+interface MemoryRow {
+  id: string
+  type: string
+  title: string
+  problem: string
+  context: string
+  solution: string
+  evidence: string
+  tags: string
+  source: string
+  status: string
+  session_id: string
+  agent: string
+  created_at: string
+  updated_at: string
+}
+
 const VALID_TYPES = ["success", "failure", "pattern", "decision", "research", "note"] as const
 type MemoryType = (typeof VALID_TYPES)[number]
+const MEMORY_ROOT = ".opencode/memory"
+const DB_FILE = "memory.db"
+const FALLBACK_FILE = "memory-fallback.json"
+
+function getMemoryRoot(ctx?: ToolContext): string {
+  const root = ctx?.worktree || ctx?.directory || process.cwd()
+  return path.join(root, MEMORY_ROOT)
+}
 
 function escapeLike(s: string): string {
   return s.replace(/[%_]/g, "\\$&")
 }
 
+// ─── Backend abstraction ──────────────────────────────────────────────
+
+interface Backend {
+  insert(row: MemoryRow): Promise<void>
+  search(params: {
+    type?: string
+    terms: string[]
+    tags: string[]
+    limit: number
+  }): Promise<{ id: string; type: string; title: string; excerpt: string; tags: string; status: string; source: string; created_at: string }[]>
+  readById(id: string): Promise<MemoryRow | null>
+  listAll(limit: number): Promise<{ id: string; type: string; title: string; status: string; tags: string; created_at: string }[]>
+  countByType(): Promise<{ type: string; count: number }[]>
+  totalCount(): Promise<number>
+}
+
+// ─── SQLite backend (primary) ─────────────────────────────────────────
+
+async function createSqliteBackend(root: string): Promise<Backend | null> {
+  try {
+    const initSqlJs = (await import("sql.js")).default
+    const SQL = await initSqlJs()
+    const dbf = path.join(root, DB_FILE)
+    let db: any
+
+    try {
+      const buffer = await readFile(dbf)
+      db = new SQL.Database(buffer)
+    } catch {
+      db = new SQL.Database()
+    }
+
+    const SCHEMA = `
+      CREATE TABLE IF NOT EXISTS memories (
+        id          TEXT PRIMARY KEY,
+        type        TEXT NOT NULL CHECK(type IN ('success','failure','pattern','decision','research','note')),
+        title       TEXT NOT NULL,
+        problem     TEXT DEFAULT '',
+        context     TEXT DEFAULT '',
+        solution    TEXT DEFAULT '',
+        evidence    TEXT DEFAULT '',
+        tags        TEXT DEFAULT '',
+        source      TEXT DEFAULT '',
+        status      TEXT DEFAULT 'recorded',
+        session_id  TEXT DEFAULT '',
+        agent       TEXT DEFAULT '',
+        created_at  TEXT NOT NULL,
+        updated_at  TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_memories_type ON memories(type);
+      CREATE INDEX IF NOT EXISTS idx_memories_created ON memories(created_at);
+    `
+    db.run(SCHEMA)
+
+    async function persist(): Promise<void> {
+      const data = db.export()
+      await writeFile(dbf, Buffer.from(data))
+    }
+
+    return {
+      async insert(row) {
+        db.run(
+          `INSERT INTO memories (id, type, title, problem, context, solution, evidence, tags, source, status, session_id, agent, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [row.id, row.type, row.title, row.problem, row.context, row.solution, row.evidence,
+           row.tags, row.source, row.status, row.session_id, row.agent, row.created_at, row.updated_at],
+        )
+        await persist()
+      },
+
+      async search({ type, terms, tags, limit }) {
+        const wheres: string[] = []
+        const params: string[] = []
+
+        if (type) {
+          wheres.push("type = ?")
+          params.push(type)
+        }
+
+        if (terms.length > 0) {
+          const likes = terms.map(() =>
+            `(title LIKE ? OR problem LIKE ? OR context LIKE ? OR solution LIKE ? OR evidence LIKE ? OR tags LIKE ? OR source LIKE ?)`,
+          )
+          wheres.push(`(${likes.join(" AND ")})`)
+          for (const t of terms) {
+            const p = `%${escapeLike(t)}%`
+            params.push(p, p, p, p, p, p, p)
+          }
+        }
+
+        for (const tag of tags) {
+          wheres.push("tags LIKE ?")
+          params.push(`%${escapeLike(tag)}%`)
+        }
+
+        const where = wheres.length > 0 ? `WHERE ${wheres.join(" AND ")}` : ""
+        const sql = `SELECT id, type, title,
+                            substr(problem || ' ' || context || ' ' || solution, 1, 400) AS excerpt,
+                            tags, status, source, created_at
+                     FROM memories ${where} ORDER BY created_at DESC LIMIT ?`
+        params.push(String(limit))
+
+        const stmt = db.prepare(sql)
+        stmt.bind(params)
+        const rows: any[] = []
+        while (stmt.step()) {
+          rows.push(stmt.getAsObject())
+        }
+        stmt.free()
+        return rows
+      },
+
+      async readById(id) {
+        const stmt = db.prepare("SELECT * FROM memories WHERE id = ?")
+        stmt.bind([id])
+        if (!stmt.step()) { stmt.free(); return null }
+        const row = stmt.getAsObject() as MemoryRow
+        stmt.free()
+        return row
+      },
+
+      async listAll(limit) {
+        const stmt = db.prepare("SELECT id, type, title, status, tags, created_at FROM memories ORDER BY created_at DESC LIMIT ?")
+        stmt.bind([String(limit)])
+        const rows: any[] = []
+        while (stmt.step()) {
+          rows.push(stmt.getAsObject())
+        }
+        stmt.free()
+        return rows
+      },
+
+      async countByType() {
+        const stmt = db.prepare("SELECT type, count(*) as count FROM memories GROUP BY type")
+        const rows: { type: string; count: number }[] = []
+        while (stmt.step()) {
+          const r = stmt.getAsObject() as { type: string; count: number }
+          rows.push(r)
+        }
+        stmt.free()
+        return rows
+      },
+
+      async totalCount() {
+        const stmt = db.prepare("SELECT count(*) as c FROM memories")
+        stmt.bind([])
+        if (stmt.step()) {
+          const r = stmt.getAsObject() as { c: number }
+          stmt.free()
+          return r.c
+        }
+        stmt.free()
+        return 0
+      },
+    }
+  } catch {
+    return null
+  }
+}
+
+// ─── JSON file backend (fallback) ─────────────────────────────────────
+
+function createJsonBackend(root: string): Backend {
+  const storeFile = path.join(root, FALLBACK_FILE)
+  let store: MemoryRow[] = []
+
+  function load(): void {
+    try {
+      const data = fs.readFileSync(storeFile, "utf8")
+      store = JSON.parse(data)
+    } catch {
+      store = []
+    }
+  }
+
+  function save(): void {
+    try {
+      fs.mkdirSync(root, { recursive: true })
+    } catch { /* ignore */ }
+    fs.writeFileSync(storeFile, JSON.stringify(store, null, 2), "utf8")
+  }
+
+  load()
+
+  return {
+    async insert(row) {
+      store.push(row)
+      save()
+    },
+
+    async search({ type, terms, tags, limit }) {
+      let results = [...store]
+
+      if (type) {
+        results = results.filter((r) => r.type === type)
+      }
+
+      if (terms.length > 0) {
+        results = results.filter((r) => {
+          const haystack = [r.title, r.problem, r.context, r.solution, r.evidence, r.tags, r.source]
+            .filter(Boolean).join(" ").toLowerCase()
+          return terms.every((t) => haystack.includes(t.toLowerCase()))
+        })
+      }
+
+      for (const tag of tags) {
+        results = results.filter((r) => r.tags.toLowerCase().includes(tag.toLowerCase()))
+      }
+
+      results.sort((a, b) => b.created_at.localeCompare(a.created_at))
+      results = results.slice(0, limit)
+
+      return results.map((r) => ({
+        id: r.id,
+        type: r.type,
+        title: r.title,
+        excerpt: [r.problem, r.context, r.solution].filter(Boolean).join(" ").slice(0, 400),
+        tags: r.tags,
+        status: r.status,
+        source: r.source,
+        created_at: r.created_at,
+      }))
+    },
+
+    async readById(id) {
+      return store.find((r) => r.id === id) || null
+    },
+
+    async listAll(limit) {
+      return store
+        .sort((a, b) => b.created_at.localeCompare(a.created_at))
+        .slice(0, limit)
+        .map((r) => ({
+          id: r.id,
+          type: r.type,
+          title: r.title,
+          status: r.status,
+          tags: r.tags,
+          created_at: r.created_at,
+        }))
+    },
+
+    async countByType() {
+      const map = new Map<string, number>()
+      for (const r of store) {
+        map.set(r.type, (map.get(r.type) || 0) + 1)
+      }
+      return [...map.entries()].map(([type, count]) => ({ type, count }))
+    },
+
+    async totalCount() {
+      return store.length
+    },
+  }
+}
+
+// ─── Backend initialisation ───────────────────────────────────────────
+
+let cachedBackend: Backend | null = null
+let cachedRoot = ""
+
+async function getBackend(ctx?: ToolContext): Promise<Backend> {
+  const root = getMemoryRoot(ctx)
+
+  // Reuse cached backend when root hasn't changed
+  if (cachedBackend && cachedRoot === root) return cachedBackend
+
+  await mkdir(root, { recursive: true }).catch(() => {})
+
+  // Try SQLite first
+  const sqlite = await createSqliteBackend(root)
+  if (sqlite) {
+    cachedBackend = sqlite
+    cachedRoot = root
+    return sqlite
+  }
+
+  // Fallback to JSON
+  cachedBackend = createJsonBackend(root)
+  cachedRoot = root
+  return cachedBackend
+}
+
+// ─── Helper ───────────────────────────────────────────────────────────
+
+function buildRow(args: any, ctx?: ToolContext, type?: MemoryType): MemoryRow {
+  const now = new Date().toISOString()
+  const id = `${Date.now().toString(36)}-${crypto.randomBytes(3).toString("hex")}`
+  const tags = (args.tags || []).map((t: string) => t.trim()).filter(Boolean).join(",")
+  return {
+    id,
+    type: type || args.type as string,
+    title: args.title.trim(),
+    problem: args.problem || "",
+    context: args.context || "",
+    solution: args.solution || "",
+    evidence: args.evidence || "",
+    tags,
+    source: args.source || "",
+    status: args.status || "recorded",
+    session_id: ctx?.sessionID || "",
+    agent: ctx?.agent || "",
+    created_at: now,
+    updated_at: now,
+  }
+}
+
 // ─── Tools ────────────────────────────────────────────────────────────
 
 export const add = tool({
-  description: "Add a persistent project memory entry (SQLite). Use for verified successes, failed attempts, decisions, reusable patterns, research sources, and notes.",
+  description: "Add a persistent project memory entry. Use for verified successes, failed attempts, decisions, reusable patterns, research sources, and notes.",
   args: {
     type: tool.schema.enum(VALID_TYPES).describe("Memory category: success, failure, pattern, decision, research, or note"),
     title: tool.schema.string().describe("Short searchable title"),
@@ -27,30 +379,15 @@ export const add = tool({
     status: tool.schema.string().optional().describe("Status such as verified, failed, partial, deprecated, candidate"),
   },
   async execute(args, ctx: ToolContext) {
-    const d = await getDatabase(ctx)
-    const id = `${Date.now().toString(36)}-${crypto.randomBytes(3).toString("hex")}`
-    const now = new Date().toISOString()
-    const tags = (args.tags || []).map((t: string) => t.trim()).filter(Boolean).join(",")
-    const type = args.type as MemoryType
-
-    d.run(
-      `INSERT INTO memories (id, type, title, problem, context, solution, evidence, tags, source, status, session_id, agent, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        id, type, args.title.trim(),
-        args.problem || "", args.context || "", args.solution || "", args.evidence || "",
-        tags, args.source || "", args.status || "recorded",
-        ctx?.sessionID || "", ctx?.agent || "", now, now,
-      ],
-    )
-    await saveDatabase()
-
+    const backend = await getBackend(ctx)
+    const row = buildRow(args, ctx, args.type as MemoryType)
+    await backend.insert(row)
     return ""
   },
 })
 
 export const search = tool({
-  description: "Search persistent project memory (SQLite). Returns matching entries by keyword, type, or tags.",
+  description: "Search persistent project memory. Returns matching entries by keyword, type, or tags.",
   args: {
     query: tool.schema.string().describe("Keywords, error text, package name, command, or concept to search"),
     type: tool.schema.enum(VALID_TYPES).optional().describe("Optional category filter"),
@@ -58,56 +395,15 @@ export const search = tool({
     limit: tool.schema.number().optional().describe("Maximum results to return; default 8"),
   },
   async execute(args, ctx: ToolContext) {
-    const d = await getDatabase(ctx)
+    const backend = await getBackend(ctx)
     const terms = args.query.split(/\s+/).filter(Boolean)
     const tagFilters = (args.tags || []).filter(Boolean)
     const limit = Math.max(1, Math.min(50, Number(args.limit || 8)))
 
-    const wheres: string[] = []
-    const params: string[] = []
-
-    if (args.type) {
-      wheres.push("type = ?")
-      params.push(args.type)
-    }
-
-    if (terms.length > 0) {
-      const likes = terms.map(() =>
-        `(title LIKE ? OR problem LIKE ? OR context LIKE ? OR solution LIKE ? OR evidence LIKE ? OR tags LIKE ? OR source LIKE ?)`,
-      )
-      wheres.push(`(${likes.join(" AND ")})`)
-      for (const t of terms) {
-        const p = `%${escapeLike(t)}%`
-        params.push(p, p, p, p, p, p, p)
-      }
-    }
-
-    for (const tag of tagFilters) {
-      wheres.push("tags LIKE ?")
-      params.push(`%${escapeLike(tag)}%`)
-    }
-
-    const where = wheres.length > 0 ? `WHERE ${wheres.join(" AND ")}` : ""
-    const sql = `SELECT id, type, title, substr(problem || ' ' || context || ' ' || solution, 1, 400) AS excerpt,
-                        tags, status, source, created_at
-                 FROM memories ${where} ORDER BY created_at DESC LIMIT ?`
-    params.push(String(limit))
-
-    const stmt = d.prepare(sql)
-    stmt.bind(params)
-    const rows: string[] = []
-
-    while (stmt.step()) {
-      const r = stmt.getAsObject() as {
-        id: string; type: string; title: string; excerpt: string
-        tags: string; status: string; source: string; created_at: string
-      }
-      rows.push(`- [${r.type}] ${r.title}  (${r.id})`)
-    }
-    stmt.free()
+    const rows = await backend.search({ type: args.type, terms, tags: tagFilters, limit })
 
     if (rows.length === 0) return ""
-    return `memory_search: ${rows.length} results\n${rows.join("\n")}`
+    return `memory_search: ${rows.length} results\n${rows.map((r) => `- [${r.type}] ${r.title}  (${r.id})`).join("\n")}`
   },
 })
 
@@ -118,36 +414,25 @@ export const read = tool({
     maxChars: tool.schema.number().optional().describe("Maximum characters to return; default 12000"),
   },
   async execute(args, ctx: ToolContext) {
-    const d = await getDatabase(ctx)
+    const backend = await getBackend(ctx)
     const maxChars = Math.max(1000, Math.min(50000, Number(args.maxChars || 12000)))
 
     if (!args.id) {
-      const stmt = d.prepare("SELECT id, type, title, status, tags, created_at FROM memories ORDER BY created_at DESC LIMIT 50")
-      const rows: string[] = []
-      while (stmt.step()) {
-        const r = stmt.getAsObject() as { id: string; type: string; title: string; status: string; tags: string; created_at: string }
-        rows.push(`- ${r.id} [${r.type}] ${r.title} (${r.status}) tags:${r.tags || "-"}`)
-      }
-      stmt.free()
+      const rows = await backend.listAll(50)
       if (rows.length === 0) return ""
-      return `memory_read: ${rows.length} entries\n${rows.join("\n")}`
+      return `memory_read: ${rows.length} entries\n${rows.map((r) =>
+        `- ${r.id} [${r.type}] ${r.title} (${r.status}) tags:${r.tags || "-"}`).join("\n")}`
     }
 
-    const stmt = d.prepare("SELECT * FROM memories WHERE id = ?")
-    stmt.bind([args.id])
-    if (!stmt.step()) {
-      stmt.free()
-      return ""
-    }
-    const r = stmt.getAsObject() as Record<string, string>
-    stmt.free()
+    const row = await backend.readById(args.id)
+    if (!row) return ""
 
     const fields = ["id", "type", "title", "problem", "context", "solution", "evidence", "tags", "source", "status", "session_id", "agent", "created_at", "updated_at"]
     const lines = fields
-      .filter((f) => r[f])
+      .filter((f) => (row as any)[f])
       .map((f) => {
-        const val = r[f].length > maxChars ? r[f].slice(0, maxChars) + "…" : r[f]
-        return `${f}: ${val}`
+        const val = String((row as any)[f])
+        return `${f}: ${val.length > maxChars ? val.slice(0, maxChars) + "…" : val}`
       })
     return lines.join("\n")
   },
@@ -157,7 +442,6 @@ export const list = tool({
   description: "List memory summary: entry count by type, total entries, and database info.",
   args: {},
   async execute(_args, ctx: ToolContext) {
-    const d = await getDatabase(ctx)
-    return ""
+    return "" // Silent — no UI clutter
   },
 })

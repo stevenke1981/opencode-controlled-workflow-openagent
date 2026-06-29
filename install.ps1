@@ -66,6 +66,24 @@ if (Test-Path $TargetConfig) {
   Copy-Item $SourceConfig $TargetConfig -Force
 }
 
+# Step 3: Verify essential files
+$ToolsDir = Join-Path $Target ".opencode\tools"
+$ToolFiles = @("memory.ts")
+$PluginDeps = @("memory-db.ts")
+$Missing = @()
+foreach ($f in $ToolFiles) {
+  if (-not (Test-Path (Join-Path $ToolsDir $f))) { $Missing += "TOOL:$f" }
+}
+foreach ($f in $PluginDeps) {
+  if (-not (Test-Path (Join-Path $ToolsDir $f))) { $Missing += "PLUGIN-DEP:$f" }
+}
+if ($Missing.Count -gt 0) {
+  Write-Host "WARNING: Missing files: $($Missing -join ', ')"
+} else {
+  Write-Host "✓ Tool: memory.ts (self-contained, SQLite/JSON fallback)"
+  Write-Host "✓ Plugin dep: memory-db.ts (shared module for memory-lifecycle.plugin.ts)"
+}
+
 Write-Host ""
 Write-Host "✓ Plugins auto-enabled:"
 Write-Host "  - .opencode/plugins/memory-lifecycle.plugin.ts"
