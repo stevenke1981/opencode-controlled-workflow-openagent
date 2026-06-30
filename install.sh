@@ -8,13 +8,19 @@ TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
 
 echo "Installing OpenCode Controlled Workflow to $TARGET_DIR"
 
-if [ -d "$TARGET_DIR/.opencode" ]; then
-  echo "Backing up existing .opencode to $TARGET_DIR/.opencode.backup-$TIMESTAMP"
-  cp -a "$TARGET_DIR/.opencode" "$TARGET_DIR/.opencode.backup-$TIMESTAMP"
-fi
+# Self-install guard: if source == target, the repo already has .opencode/ in git
+if [ "$SOURCE_DIR" = "$TARGET_DIR" ]; then
+  echo "ℹ️  Source and target are the same directory — skipping file copy."
+  echo "   The .opencode/ directory is already present from git clone."
+else
+  if [ -d "$TARGET_DIR/.opencode" ]; then
+    echo "Backing up existing .opencode to $TARGET_DIR/.opencode.backup-$TIMESTAMP"
+    cp -a "$TARGET_DIR/.opencode" "$TARGET_DIR/.opencode.backup-$TIMESTAMP"
+  fi
 
-cp -a "$SOURCE_DIR/.opencode" "$TARGET_DIR/"
-cp "$SOURCE_DIR/AGENTS.md" "$TARGET_DIR/AGENTS.md"
+  cp -a "$SOURCE_DIR/.opencode" "$TARGET_DIR/"
+  cp "$SOURCE_DIR/AGENTS.md" "$TARGET_DIR/AGENTS.md"
+fi
 
 # Merge opencode.jsonc: add controlled-workflow plugins if missing
 TARGET_CONFIG="$TARGET_DIR/opencode.jsonc"
@@ -81,11 +87,12 @@ echo ""
 echo "Done. Try: opencode run '/controlled-workflow review this repo'"
 
 # Warn about global tools directory contamination
-if [ -f "$HOME/.config/opencode/tools/memory-db.ts" ] || [ -f "$HOME/.config/opencode/tools/memory.ts" ]; then
+if [ -f "$HOME/.config/opencode/tools/memory-db.ts" ] || [ -f "$HOME/.config/opencode/tools/memory.ts" ] || [ -f "$HOME/.config/opencode/tools/migrate-to-sqlite.ts" ]; then
   echo ""
   echo "⚠️  NOTE: OpenCode also loads .ts files from ~/.config/opencode/tools/."
   echo "   If you previously copied memory*.ts files there, they may cause"
-  echo "   'Cannot find package sql.js' errors. To fix:"
-  echo "     rm ~/.config/opencode/tools/memory-db.ts ~/.config/opencode/tools/memory.ts"
+  echo "   'Cannot find package sql.js' errors or import resolution failures."
+  echo "   To fix:"
+  echo "     rm -f ~/.config/opencode/tools/memory-db.ts ~/.config/opencode/tools/memory.ts ~/.config/opencode/tools/migrate-to-sqlite.ts"
   echo "   The correct files are in this project's .opencode/tools/ and .opencode/lib/."
 fi
