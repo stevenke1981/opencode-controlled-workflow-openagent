@@ -12,7 +12,7 @@ param(
 $Root = Split-Path -Parent $PSScriptRoot
 $ToolPath = Join-Path $Root '.opencode\tools'
 
-# Use node to insert into SQLite via memory-db
+# Use node to insert into SQLite via memory-db (in .opencode/lib/)
 $jsonArgs = @{
   type = $Type
   title = $Title
@@ -26,7 +26,7 @@ $jsonArgs = @{
 } | ConvertTo-Json -Compress
 
 $nodeCode = @"
-const { getDatabase, saveDatabase, nowIso } = require('$($ToolPath.Replace('\', '\\'))\\memory-db.ts');
+const { getDatabase, saveDatabase, nowIso } = require('$($Root.Replace('\', '\\'))\\.opencode\\lib\\memory-db.ts');
 const crypto = require('crypto');
 (async () => {
   const db = await getDatabase();

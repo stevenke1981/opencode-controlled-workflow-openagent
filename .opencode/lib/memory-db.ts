@@ -1,6 +1,16 @@
 /**
  * Shared SQLite database module for OpenCode memory system.
  * Used by tools/memory.ts and plugins/memory-lifecycle.plugin.ts
+ *
+ * NOTE: This file lives in .opencode/lib/ (NOT .opencode/tools/) because
+ * OpenCode automatically loads all .ts files from .opencode/tools/ as custom
+ * tools. Since this module uses a static import from "sql.js", placing it in
+ * tools/ would crash OpenCode's tool registry when sql.js is not resolvable
+ * (e.g., when accidentally copied to ~/.config/opencode/tools/).
+ *
+ * The actual tool entry points are in .opencode/tools/memory.ts, which uses
+ * dynamic import() with try-catch so it gracefully falls back to JSON storage
+ * when sql.js is unavailable.
  */
 import { readFile, writeFile, mkdir } from "node:fs/promises"
 import path from "node:path"

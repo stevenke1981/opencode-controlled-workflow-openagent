@@ -57,14 +57,19 @@ fi
 
 # Verify essential files
 TOOLS_DIR="$TARGET_DIR/.opencode/tools"
+LIB_DIR="$TARGET_DIR/.opencode/lib"
 MISSING=""
 for f in "memory.ts"; do
   if [ ! -f "$TOOLS_DIR/$f" ]; then MISSING="$MISSING TOOL:$f"; fi
+done
+for f in "memory-db.ts" "migrate-to-sqlite.ts"; do
+  if [ ! -f "$LIB_DIR/$f" ]; then MISSING="$MISSING LIB:$f"; fi
 done
 if [ -n "$MISSING" ]; then
   echo "WARNING: Missing files:$MISSING"
 else
   echo "✓ Tool: memory.ts (self-contained, SQLite/JSON fallback)"
+  echo "✓ Lib:  memory-db.ts, migrate-to-sqlite.ts (in .opencode/lib/, not scanned as tools)"
 fi
 
 echo ""
@@ -74,3 +79,13 @@ echo "  - .opencode/plugins/research-learn-loop.plugin.ts"
 echo "  Remove entries from opencode.jsonc plugin array to disable."
 echo ""
 echo "Done. Try: opencode run '/controlled-workflow review this repo'"
+
+# Warn about global tools directory contamination
+if [ -f "$HOME/.config/opencode/tools/memory-db.ts" ] || [ -f "$HOME/.config/opencode/tools/memory.ts" ]; then
+  echo ""
+  echo "⚠️  NOTE: OpenCode also loads .ts files from ~/.config/opencode/tools/."
+  echo "   If you previously copied memory*.ts files there, they may cause"
+  echo "   'Cannot find package sql.js' errors. To fix:"
+  echo "     rm ~/.config/opencode/tools/memory-db.ts ~/.config/opencode/tools/memory.ts"
+  echo "   The correct files are in this project's .opencode/tools/ and .opencode/lib/."
+fi

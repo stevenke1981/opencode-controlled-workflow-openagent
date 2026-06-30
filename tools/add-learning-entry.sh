@@ -7,10 +7,10 @@ BODY="${4:-}"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TOOL_DIR="$ROOT/.opencode/tools"
 
-# Preferred: insert into SQLite via node
+# Preferred: insert into SQLite via node (memory-db.ts is in .opencode/lib/)
 if command -v npx &>/dev/null && command -v node &>/dev/null; then
   npx tsx -e "
-const { getDatabase, saveDatabase, nowIso } = require('$TOOL_DIR/memory-db.ts');
+const { getDatabase, saveDatabase, nowIso } = require('$ROOT/.opencode/lib/memory-db.ts');
 const crypto = require('crypto');
 (async () => {
   const db = await getDatabase();

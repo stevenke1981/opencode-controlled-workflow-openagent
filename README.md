@@ -193,9 +193,9 @@ memory_list    # 列出記憶庫摘要（總數、類型分佈、最近 5 筆）
 核心檔案：
 
 ```text
-.opencode/tools/memory.ts         ← SQLite 版記憶工具
-.opencode/tools/memory-db.ts      ← 共享資料庫模組
-.opencode/tools/migrate-to-sqlite.ts  ← 從 Markdown 遷移到 SQLite
+.opencode/tools/memory.ts         ← SQLite/JSON 雙模記憶工具（動態載入 sql.js）
+.opencode/lib/memory-db.ts        ← 共享 SQLite 資料庫模組（非工具，不會被 OpenCode 掃描）
+.opencode/lib/migrate-to-sqlite.ts   ← 從 Markdown 遷移到 SQLite（非工具）
 .opencode/memory/memory.db        ← SQLite 資料庫
 .opencode/plugins/memory-lifecycle.plugin.ts
 .opencode/skills/persistent-memory/SKILL.md
