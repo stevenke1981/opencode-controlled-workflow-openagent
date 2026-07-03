@@ -26,35 +26,77 @@ fi
 TARGET_CONFIG="$TARGET_DIR/opencode.jsonc"
 SOURCE_CONFIG="$SOURCE_DIR/opencode.jsonc"
 
+merge_jsonc() {
+  node "$TMP_MERGE_SCRIPT" "$SOURCE_CONFIG" "$TARGET_CONFIG"
+}
+
 if [ -f "$TARGET_CONFIG" ]; then
-  # Use node to safely manipulate JSON (available on most dev machines)
   if command -v node &> /dev/null; then
-    node -e "
+    # Write merge script to temp file to avoid quoting issues
+    TMP_MERGE_SCRIPT=$(mktemp /tmp/opencode-merge-XXXXXX.js)
+    cat > "$TMP_MERGE_SCRIPT" << 'JSEOF'
 const fs = require('fs');
 const path = require('path');
-const src = fs.readFileSync('$SOURCE_CONFIG', 'utf8');
-const tgt = fs.readFileSync('$TARGET_CONFIG', 'utf8');
-// Remove comments for JSON parse
-const strip = (s) => s.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
-const srcJson = JSON.parse(strip(src));
-const tgtJson = JSON.parse(strip(tgt));
-// Merge plugins (deduplicate)
+
+const [,, sourcePath, targetPath] = process.argv;
+
+/*
+ * Strip JSONC comments (single-line and block) while respecting strings.
+ * Uses a state machine to avoid false matches like "https://" inside strings.
+ */
+function stripJSONC(s) {
+  let out = '';
+  let inStr = false;
+  let inBlock = false;
+  let i = 0;
+  while (i < s.length) {
+    if (inBlock) {
+      if (s[i] === '*' && s[i + 1] === '/') { inBlock = false; i += 2; }
+      else { i++; }
+    } else if (inStr) {
+      if (s[i] === '\\' && (s[i + 1] === '"' || s[i + 1] === '\\' || s[i + 1] === '/')) {
+        out += s[i] + s[i + 1]; i += 2;
+      } else if (s[i] === '"') { inStr = false; out += s[i]; i++; }
+      else { out += s[i]; i++; }
+    } else {
+      if (s[i] === '/' && s[i + 1] === '/') { i += 2; while (i < s.length && s[i] !== '\n') i++; }
+      else if (s[i] === '/' && s[i + 1] === '*') { i += 2; inBlock = true; }
+      else if (s[i] === '"') { inStr = true; out += s[i]; i++; }
+      else { out += s[i]; i++; }
+    }
+  }
+  return out;
+}
+
+const src = fs.readFileSync(sourcePath, 'utf8');
+const tgt = fs.readFileSync(targetPath, 'utf8');
+
+const srcJson = JSON.parse(stripJSONC(src));
+const tgtJson = JSON.parse(stripJSONC(tgt));
+
+// Merge plugins (deduplicate by basename)
 const pluginSet = new Set(tgtJson.plugin || []);
-['$SOURCE_DIR/.opencode/plugins/memory-lifecycle.plugin.ts', '$SOURCE_DIR/.opencode/plugins/research-learn-loop.plugin.ts'].forEach(p => {
-  // Convert absolute source path to relative target path
-  const rel = '.opencode/plugins/' + path.basename(p);
-  if (![...pluginSet].some(x => x.endsWith(path.basename(p)))) {
+const pluginFiles = [
+  '.opencode/plugins/memory-lifecycle.plugin.ts',
+  '.opencode/plugins/research-learn-loop.plugin.ts',
+];
+pluginFiles.forEach(rel => {
+  if (![...pluginSet].some(x => x.endsWith(path.basename(rel)))) {
     pluginSet.add(rel);
   }
 });
 tgtJson.plugin = [...pluginSet];
-// Write back preserving original formatting style
+
+// Write back
 const out = JSON.stringify(tgtJson, null, 2) + '\n';
-fs.writeFileSync('$TARGET_CONFIG', out, 'utf8');
-console.log('Merged plugins into opencode.jsonc');
-"
+fs.writeFileSync(targetPath, out, 'utf8');
+console.log('✓ Merged plugins into opencode.jsonc');
+JSEOF
+
+    merge_jsonc
+    rm -f "$TMP_MERGE_SCRIPT"
   else
-    # Fallback: copy source config
+    echo "⚠️  node not found, copying source config as fallback"
     cp "$SOURCE_CONFIG" "$TARGET_CONFIG"
   fi
 else
