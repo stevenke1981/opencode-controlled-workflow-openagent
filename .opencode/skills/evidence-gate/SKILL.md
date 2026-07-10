@@ -1,3 +1,8 @@
+---
+name: evidence-gate
+description: Use before claiming completion to require changed-artifact evidence, executed verification, known limitations, and an honest final status.
+---
+
 # Evidence Gate Skill
 
 Use this before final output.

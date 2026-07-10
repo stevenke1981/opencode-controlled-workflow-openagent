@@ -49,6 +49,9 @@
       }
     },
     "explore": {
+      // A global config may disable OpenCode's built-in explore agent. This
+      // project provides its own read-only Explore definition, so re-enable it.
+      "disable": false,
       "permission": {
         "edit": "deny",
         "webfetch": "deny"
@@ -68,20 +71,15 @@
     }
   },
 
-  // Optional MCP servers. Add read-only docs/search MCPs here when available.
-  // Use `opencode mcp add` for interactive setup. Keep mutating MCPs gated.
+  // Optional MCP servers. Hermes-created fragments live under
+  // .opencode/evolution/mcp and are merged by hermes-self-evolution.plugin.ts.
+  // New fragments are disabled until explicitly reviewed and enabled.
   "mcp": {},
 
 
-  // Custom tools are loaded from .opencode/tools/.
-  // This package provides memory_add, memory_search, memory_read, memory_list in .opencode/tools/memory.ts.
-  // Local plugins are auto-loaded from .opencode/plugins/; keep plugin empty unless adding npm plugins.
-
-  // Optional plugins. Local plugin files are placed in .opencode/plugins/.
-  // Both plugins are auto-enabled by the install script; remove entries to disable.
-  "plugin": [
-    ".opencode/plugins/memory-lifecycle.plugin.ts",
-    ".opencode/plugins/research-learn-loop.plugin.ts"
-  ]
+  // Custom tools and local plugins are auto-discovered from .opencode/tools
+  // and .opencode/plugins. Do not repeat their paths here: explicit entries
+  // plus auto-discovery execute the same plugin more than once.
+  "plugin": []
 
 }

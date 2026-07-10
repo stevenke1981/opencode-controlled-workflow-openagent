@@ -12,6 +12,20 @@ function exists(rel) {
 function requireFile(rel) {
   if (!exists(rel)) errors.push(`Missing required file: ${rel}`);
 }
+function read(rel) {
+  return fs.readFileSync(path.join(root, rel), "utf8").replace(/^\uFEFF/, "");
+}
+function frontmatter(rel) {
+  const content = read(rel).replace(/\r\n/g, "\n");
+  const match = content.match(/^---\n([\s\S]*?)\n---\n/);
+  if (!match) return null;
+  const fields = {};
+  for (const line of match[1].split("\n")) {
+    const field = line.match(/^([A-Za-z_][A-Za-z0-9_-]*):\s*(.+?)\s*$/);
+    if (field) fields[field[1]] = field[2].replace(/^(["'])(.*)\1$/, "$2");
+  }
+  return fields;
+}
 function stripJSONC(input) {
   let out = "", inString = false, line = false, block = false, escaped = false;
   for (let i = 0; i < input.length; i++) {
@@ -36,10 +50,21 @@ function stripJSONC(input) {
 [
   "README.md", "AGENTS.md", "opencode.jsonc", "install.sh", "install.ps1",
   ".opencode/tools/memory.ts",
+  ".opencode/tools/evolution.ts",
   ".opencode/lib/memory-db.ts",
   ".opencode/lib/migrate-to-sqlite.ts",
+  ".opencode/lib/evolution-core.ts",
   ".opencode/plugins/memory-lifecycle.plugin.ts",
   ".opencode/plugins/research-learn-loop.plugin.ts",
+  ".opencode/plugins/hermes-self-evolution.plugin.ts",
+  ".opencode/plugins/hermes-self-evolution.config.jsonc",
+  ".opencode/agent/hermes-reviewer.md",
+  ".opencode/command/learn.md",
+  ".opencode/command/hermes-curate.md",
+  "tests/evolution-core.test.ts",
+  "tests/installers.test.ts",
+  "tests/memory-db.test.ts",
+  "tests/plugin-lifecycle.test.ts",
 ].forEach(requireFile);
 
 const configPath = path.join(root, "opencode.jsonc");
@@ -48,14 +73,13 @@ if (exists("opencode.jsonc")) {
     const config = JSON.parse(stripJSONC(fs.readFileSync(configPath, "utf8")));
     if (!config.default_agent) warnings.push("opencode.jsonc has no default_agent.");
     const plugins = Array.isArray(config.plugin) ? config.plugin : [];
-    for (const required of [
-      ".opencode/plugins/memory-lifecycle.plugin.ts",
-      ".opencode/plugins/research-learn-loop.plugin.ts",
-    ]) {
-      if (!plugins.some((p) => path.basename(String(p)) === path.basename(required))) {
-        errors.push(`Plugin not enabled: ${required}`);
+    for (const entry of plugins) {
+      const spec = Array.isArray(entry) ? entry[0] : entry;
+      if (typeof spec === "string" && /(?:^|[\\/])\.opencode[\\/]plugins[\\/].+\.[cm]?[jt]s$/i.test(spec)) {
+        errors.push(`Local plugin is both explicit and auto-discovered: ${spec}`);
       }
     }
+    if (!config.mcp || typeof config.mcp !== "object" || Array.isArray(config.mcp)) errors.push("opencode.jsonc mcp must be an object.");
   } catch (error) {
     errors.push(`Invalid opencode.jsonc: ${error.message}`);
   }
@@ -65,8 +89,55 @@ for (const dir of [".opencode/agent", ".opencode/skills", ".opencode/commands"])
   if (!exists(dir)) errors.push(`Missing required directory: ${dir}`);
 }
 
+if (exists(".opencode/skills")) {
+  for (const entry of fs.readdirSync(path.join(root, ".opencode/skills"), { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const rel = `.opencode/skills/${entry.name}/SKILL.md`;
+    if (!exists(rel)) { errors.push(`Skill directory lacks SKILL.md: ${entry.name}`); continue; }
+    const meta = frontmatter(rel);
+    if (!meta) { errors.push(`Skill lacks YAML frontmatter: ${rel}`); continue; }
+    if (meta.name !== entry.name) errors.push(`Skill name must match directory: ${rel}`);
+    if (!meta.description) errors.push(`Skill description missing: ${rel}`);
+  }
+}
+
+for (const rel of [
+  ".opencode/plugins/memory-lifecycle.plugin.ts",
+  ".opencode/plugins/research-learn-loop.plugin.ts",
+  ".opencode/plugins/hermes-self-evolution.plugin.ts",
+]) {
+  if (!exists(rel)) continue;
+  const source = read(rel);
+  if (!/export\s+default\b/.test(source)) errors.push(`Plugin has no default export: ${rel}`);
+  if (/^[ \t]*["']session\.(?:created|idle|compacted)["']\s*:/m.test(source)) {
+    errors.push(`Plugin uses obsolete top-level session event hook instead of event(): ${rel}`);
+  }
+}
+
+const optionalUpstream = "optional/oh-my-openagent/oh-my-openagent-controlled.jsonc";
+if (exists(optionalUpstream)) {
+  try {
+    const parsed = JSON.parse(stripJSONC(read(optionalUpstream)));
+    if (parsed["oh-my-openagent"]) errors.push("Optional upstream config must use direct schema keys, not an oh-my-openagent wrapper.");
+    if (parsed.teamMode || parsed.ralphLoop) errors.push("Optional upstream config must use snake_case keys.");
+    if (!parsed.ralph_loop || !parsed.team_mode) errors.push("Optional upstream config must declare team_mode and ralph_loop.");
+  } catch (error) {
+    errors.push(`Invalid optional upstream JSONC: ${error.message}`);
+  }
+}
+
+if (exists(".opencode/tools/memory.ts") && !read(".opencode/tools/memory.ts").includes('import("bun:sqlite")')) {
+  errors.push("memory.ts must use the zero-dependency Bun SQLite backend.");
+}
+
 if (exists(".opencode/command") && exists(".opencode/commands")) {
-  warnings.push("Both command/ and commands/ exist; keep them synchronized or remove the legacy directory in a future major release.");
+  for (const name of fs.readdirSync(path.join(root, ".opencode/command"))) {
+    const canonical = `.opencode/command/${name}`;
+    const legacy = `.opencode/commands/${name}`;
+    if (exists(legacy) && read(canonical) !== read(legacy)) {
+      errors.push(`Command compatibility copies differ: ${canonical} vs ${legacy}`);
+    }
+  }
 }
 
 for (const warning of warnings) console.warn(`WARN: ${warning}`);

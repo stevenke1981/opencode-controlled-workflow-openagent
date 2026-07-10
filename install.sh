@@ -1,149 +1,146 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PROJECT_PATH="${1:-.}"
-SOURCE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-TARGET_DIR="$(cd "$PROJECT_PATH" && pwd)"
-TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
-TARGET_CONFIG="$TARGET_DIR/opencode.jsonc"
-SOURCE_CONFIG="$SOURCE_DIR/opencode.jsonc"
-TMP_MERGE_SCRIPT=""
+scope="project"
+project_path="."
+config_path="${XDG_CONFIG_HOME:-$HOME/.config}/opencode"
+dry_run=0
 
-cleanup() {
-  if [ -n "${TMP_MERGE_SCRIPT:-}" ] && [ -f "$TMP_MERGE_SCRIPT" ]; then
-    rm -f "$TMP_MERGE_SCRIPT"
-  fi
-}
-trap cleanup EXIT
-
-echo "Installing OpenCode Controlled Workflow to $TARGET_DIR"
-
-if [ "$SOURCE_DIR" = "$TARGET_DIR" ]; then
-  echo "ℹ️  Source and target are the same directory — skipping file copy."
-else
-  if [ -d "$TARGET_DIR/.opencode" ]; then
-    BACKUP="$TARGET_DIR/.opencode.backup-$TIMESTAMP"
-    echo "Backing up existing .opencode to $BACKUP"
-    cp -a "$TARGET_DIR/.opencode" "$BACKUP"
-  fi
-
-  cp -a "$SOURCE_DIR/.opencode" "$TARGET_DIR/"
-  cp "$SOURCE_DIR/AGENTS.md" "$TARGET_DIR/AGENTS.md"
-fi
-
-if [ -f "$TARGET_CONFIG" ]; then
-  CONFIG_BACKUP="$TARGET_CONFIG.backup-$TIMESTAMP"
-  cp "$TARGET_CONFIG" "$CONFIG_BACKUP"
-  echo "Backed up existing config to $CONFIG_BACKUP"
-
-  if ! command -v node >/dev/null 2>&1; then
-    echo "⚠️  node is required to safely merge JSONC."
-    echo "   Existing config was preserved; add these plugins manually:"
-    echo "   - .opencode/plugins/memory-lifecycle.plugin.ts"
-    echo "   - .opencode/plugins/research-learn-loop.plugin.ts"
-  else
-    TMP_MERGE_SCRIPT="$(mktemp "${TMPDIR:-/tmp}/opencode-merge-XXXXXX.js")"
-    cat > "$TMP_MERGE_SCRIPT" <<'JSEOF'
-const fs = require("node:fs");
-const path = require("node:path");
-
-const [,, targetPath] = process.argv;
-
-function stripJSONC(input) {
-  let out = "";
-  let inString = false;
-  let inLineComment = false;
-  let inBlockComment = false;
-  let escaped = false;
-
-  for (let i = 0; i < input.length; i++) {
-    const ch = input[i];
-    const next = input[i + 1];
-
-    if (inLineComment) {
-      if (ch === "\n") {
-        inLineComment = false;
-        out += ch;
-      }
-      continue;
-    }
-    if (inBlockComment) {
-      if (ch === "*" && next === "/") {
-        inBlockComment = false;
-        i++;
-      }
-      continue;
-    }
-    if (inString) {
-      out += ch;
-      if (escaped) escaped = false;
-      else if (ch === "\\") escaped = true;
-      else if (ch === '"') inString = false;
-      continue;
-    }
-    if (ch === '"') {
-      inString = true;
-      out += ch;
-    } else if (ch === "/" && next === "/") {
-      inLineComment = true;
-      i++;
-    } else if (ch === "/" && next === "*") {
-      inBlockComment = true;
-      i++;
-    } else {
-      out += ch;
-    }
-  }
-  return out;
-}
-
-const desired = [
-  ".opencode/plugins/memory-lifecycle.plugin.ts",
-  ".opencode/plugins/research-learn-loop.plugin.ts",
-];
-
-const raw = fs.readFileSync(targetPath, "utf8");
-const config = JSON.parse(stripJSONC(raw));
-const plugins = Array.isArray(config.plugin) ? config.plugin.map(String) : [];
-
-for (const plugin of desired) {
-  const basename = path.basename(plugin);
-  if (!plugins.some((entry) => path.basename(entry) === basename)) plugins.push(plugin);
-}
-
-config.plugin = plugins;
-const tempPath = `${targetPath}.tmp-${process.pid}`;
-fs.writeFileSync(tempPath, JSON.stringify(config, null, 2) + "\n", "utf8");
-fs.renameSync(tempPath, targetPath);
-console.log("✓ Safely merged plugins into opencode.jsonc");
-JSEOF
-
-    if ! node "$TMP_MERGE_SCRIPT" "$TARGET_CONFIG"; then
-      cp "$CONFIG_BACKUP" "$TARGET_CONFIG"
-      echo "ERROR: Existing opencode.jsonc could not be parsed safely." >&2
-      echo "The original file has been restored. Fix the JSONC and rerun." >&2
-      exit 1
-    fi
-  fi
-else
-  cp "$SOURCE_CONFIG" "$TARGET_CONFIG"
-fi
-
-MISSING=()
-for f in \
-  "$TARGET_DIR/.opencode/tools/memory.ts" \
-  "$TARGET_DIR/.opencode/lib/memory-db.ts" \
-  "$TARGET_DIR/.opencode/lib/migrate-to-sqlite.ts" \
-  "$TARGET_DIR/.opencode/plugins/memory-lifecycle.plugin.ts" \
-  "$TARGET_DIR/.opencode/plugins/research-learn-loop.plugin.ts"; do
-  [ -f "$f" ] || MISSING+=("${f#$TARGET_DIR/}")
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --scope)
+      scope="${2:-}"
+      shift 2
+      ;;
+    --project-path)
+      project_path="${2:-}"
+      shift 2
+      ;;
+    --config-path)
+      config_path="${2:-}"
+      shift 2
+      ;;
+    --dry-run)
+      dry_run=1
+      shift
+      ;;
+    -h|--help)
+      echo "Usage: ./install.sh [--scope project|global] [--project-path PATH] [--config-path PATH] [--dry-run]"
+      exit 0
+      ;;
+    *)
+      echo "Unknown argument: $1" >&2
+      exit 2
+      ;;
+  esac
 done
 
-if [ "${#MISSING[@]}" -gt 0 ]; then
-  printf 'ERROR: Missing required files:\n' >&2
-  printf '  - %s\n' "${MISSING[@]}" >&2
-  exit 1
+if [[ "$scope" != "project" && "$scope" != "global" ]]; then
+  echo "--scope must be project or global" >&2
+  exit 2
 fi
 
-echo "✓ Required tools, libraries, and plugins verified."
-echo "Done. Try: opencode run '/controlled-workflow review this repo'"
+source_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source_opencode="$source_root/.opencode"
+timestamp="$(date +%Y%m%d-%H%M%S)"
+
+if [[ "$scope" == "global" ]]; then
+  target_root="$config_path"
+  target_opencode="$target_root"
+else
+  target_root="$(cd "$project_path" && pwd)"
+  target_opencode="$target_root/.opencode"
+fi
+backup_root="$target_root/.controlled-workflow-backups/$timestamp"
+
+is_runtime_artifact() {
+  local rel="${1//\\//}"
+  [[ "$rel" =~ ^memory/memory\.db(-shm|-wal)?$ \
+    || "$rel" == "memory/memory-fallback.json" \
+    || "$rel" == memory/.runtime/* \
+    || "$rel" == "memory/tool-audit.md" \
+    || "$rel" =~ ^memory\.db(-shm|-wal)?$ \
+    || "$rel" == tantivy/* \
+    || "$rel" == "vectors.usearch" \
+    || "$rel" == "status-footer/state.json" \
+    || "$rel" == evolution/backups/* \
+    || "$rel" == evolution/reviews/* \
+    || "$rel" == evolution/archive/* \
+    || "$rel" == "evolution/state.json" \
+    || "$rel" == "evolution/usage.json" ]]
+}
+
+is_package_asset() {
+  local rel="${1//\\//}"
+  [[ "$rel" =~ ^(agent|command|commands|hooks|lib|plugins|skills|tools|memory)/ ]]
+}
+
+copy_asset() {
+  local src="$1" dst="$2" backup_rel="$3"
+  if [[ -f "$dst" ]]; then
+    if [[ $dry_run -eq 1 ]]; then
+      echo "WOULD BACK UP $dst -> $backup_root/$backup_rel"
+    else
+      mkdir -p "$(dirname "$backup_root/$backup_rel")"
+      cp -p "$dst" "$backup_root/$backup_rel"
+    fi
+  fi
+  if [[ $dry_run -eq 1 ]]; then
+    echo "WOULD INSTALL $src -> $dst"
+  else
+    mkdir -p "$(dirname "$dst")"
+    cp -p "$src" "$dst"
+  fi
+}
+
+echo "Installing OpenCode Controlled Workflow ($scope scope) to $target_root"
+
+source_abs="$(cd "$source_opencode" && pwd)"
+target_abs="$(cd "$(dirname "$target_opencode")" && pwd)/$(basename "$target_opencode")"
+if [[ "$source_abs" != "$target_abs" ]]; then
+  while IFS= read -r -d '' file; do
+    rel="${file#"$source_opencode"/}"
+    if is_package_asset "$rel" && ! is_runtime_artifact "$rel"; then
+      copy_asset "$file" "$target_opencode/$rel" "opencode/$rel"
+    fi
+  done < <(find "$source_opencode" -type f -print0)
+else
+  echo "Source and target OpenCode directories are identical; package copy skipped."
+fi
+
+if [[ "$scope" == "project" ]]; then
+  if [[ "$source_root" != "$target_root" ]]; then
+    copy_asset "$source_root/AGENTS.md" "$target_root/AGENTS.md" "AGENTS.md"
+  fi
+  if [[ ! -f "$target_root/opencode.jsonc" ]]; then
+    copy_asset "$source_root/opencode.jsonc" "$target_root/opencode.jsonc" "opencode.jsonc"
+  else
+    echo "Preserved existing opencode.jsonc; local plugins are auto-discovered."
+  fi
+else
+  echo "Preserved global AGENTS.md and opencode.jsonc; installed additive auto-discovered assets only."
+fi
+
+if [[ $dry_run -eq 1 ]]; then
+  echo "Dry-run complete; no files changed."
+  exit 0
+fi
+
+required=(
+  "tools/memory.ts"
+  "tools/evolution.ts"
+  "lib/evolution-core.ts"
+  "plugins/memory-lifecycle.plugin.ts"
+  "plugins/research-learn-loop.plugin.ts"
+  "plugins/hermes-self-evolution.plugin.ts"
+  "agent/hermes-reviewer.md"
+  "skills/self-improvement/SKILL.md"
+  "command/learn.md"
+)
+for rel in "${required[@]}"; do
+  [[ -f "$target_opencode/$rel" ]] || { echo "Installation incomplete; missing $rel" >&2; exit 1; }
+done
+
+echo "Installed and verified required tools, skills, agents, plugins, hooks, and commands."
+[[ -d "$backup_root" ]] && echo "Backups: $backup_root"
+echo "Restart OpenCode, then run: opencode debug skill"

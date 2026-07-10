@@ -1,217 +1,179 @@
-# OpenCode Controlled Workflow + OpenAgent Agents Lite
+# OpenCode Controlled Workflow + Hermes Evolution
 
-這是一個「輕量化、OpenCode 原生規範、受控自動持續執行」的開發團隊包。
+一個 clean-room、輕量、可驗證的 OpenCode 開發團隊包。它參考
+[`code-yeongyu/oh-my-openagent`](https://github.com/code-yeongyu/oh-my-openagent)
+的 agent routing、todo continuation、Ralph loop、skill discovery 與安全守門，
+並加入 Hermes-style 自我演化層。
 
-它參考 `oh-my-openagent` 的 agent 分工與 auto-continue 思路，但沒有逐字複製上游 prompt。此包採用 clean-room 重寫：保留角色職責、權限邊界、驗證 gate、todo continuation、Ralph-style completion promise 與 evidence-driven 完工標準。
+本專案不是上游完整 plugin 的 vendor 或 fork。上游相容設定以
+`fb74d777`（2026-07-11）為已驗證基準；本地實作維持小型、可審查、可獨立安裝。
 
-## 目標
+## 主要能力
 
-- 新增 **Research → Try → Learn**：先查成功/失敗紀錄，再搜尋官方文件、upstream、社群、MCP/skills，整理多個解法後逐一嘗試，最後把成功與失敗寫回經驗庫。
+- 受控流程：`Intake → Scope → Plan → Implement → Verify → Review → Evidence`。
+- 11 個明確分工的 OpenCode agents，另加隔離的 `hermes-reviewer`。
+- `session.idle` todo continuation，含取消、token limit、pending question/tool、
+  cooldown、stagnation、failure backoff 與 child-session guard。
+- Research → Try → Learn：先查專案記憶，再研究、單一假設試驗、驗證、沉澱。
+- 零外部相依的 Bun SQLite 記憶工具：`memory_search/read/add/list`。
+- Hermes background review：有意義的回合結束後建立獨立 child session，
+  僅允許 memory、skill 與受控 evolution tools。
+- 可新增或更新 skills、MCP fragments、plugin proposals、hook proposals。
+- 可回復 curator：只處理 `metadata.created_by: hermes-review` 的技能，
+  apply 前先備份；背景 review 僅能 dry-run。
+- `/learn` 可從目錄、URL、筆記或對話建立可重用知識。
 
-- 將大型多代理系統壓縮成 OpenCode 可直接讀取的 `.opencode/agent/*.md`。
-- 讓主 agent 用 todo、驗證證據與停止條件持續完成任務。
-- 將 `session.idle -> incomplete todos -> continuation prompt` 的 hook 方案整理成可移植範本。
-- 避免失控：加入 cooldown、stagnation、pending-question、background-task、failure-count、token-limit 等 guard。
+## Hermes 自我演化流程
 
-## 內容
+```text
+parent session idle
+  → 檢查 main session / 新訊息 / cooldown / durable signal
+  → 建立 [hermes-review] child session
+  → deny-all permissions + memory/evolution allowlist
+  → memory_search / evolution_inspect
+  → memory_add 或 SHA-256 guarded skill update
+  → MCP 以 disabled fragment 建立
+  → plugin/hook 只產生 proposal
+  → curator dry-run
+  → 將 redacted review 摘要寫入 runtime audit
+```
+
+安全邊界：
+
+- 背景 reviewer 不能執行 shell、任意 edit/write、webfetch、提問或再分派。
+- 更新既有 skill/support/integration 必須提供目前 SHA-256。
+- 路徑穿越、symlink/junction、超大 support file、明文 secret、
+  network-to-shell MCP command 會被拒絕。
+- MCP 預設 `enabled: false`；只有 HTTPS 或 localhost HTTP remote endpoint。
+- 背景 reviewer 即使傳入 live flag，也不能啟用 plugin/hook 可執行碼。
+
+## 專案結構
 
 ```text
 .
 ├── AGENTS.md
 ├── opencode.jsonc
-├── install.ps1
-├── install.sh
+├── install.ps1 / install.sh
+├── scripts/validate.mjs
+├── tests/evolution-core.test.ts
 ├── docs/
-│   ├── controlled-workflow.md
-│   ├── hook-integration.md
-│   ├── prompt-source-map.md
-│   └── safety-boundaries.md
-├── .opencode/
-│   ├── agent/
-│   │   ├── odin.md
-│   │   ├── hephaestus.md
-│   │   ├── prometheus.md
-│   │   ├── athena.md
-│   │   ├── solomon.md
-│   │   ├── atlas.md
-│   │   ├── loki.md
-│   │   ├── merlin.md
-│   │   ├── librarian.md
-│   │   ├── explore.md
-│   │   └── multimodal-looker.md
-│   ├── command/
-│   │   ├── start-work.md
-│   │   ├── controlled-workflow.md
-│   │   ├── ultrawork.md
-│   │   ├── ralph-loop.md
-│   │   ├── verify.md
-│   │   ├── review.md
-│   │   └── fix.md
-│   ├── skills/
-│   │   ├── auto-continue/SKILL.md
-│   │   ├── evidence-gate/SKILL.md
-│   │   └── opencode-qa-lite/SKILL.md
-│   └── hooks/
-│       ├── lite-auto-continue.plugin.ts
-│       ├── lite-auto-continue.config.jsonc
-│       └── lite-auto-continue-pseudocode.md
-└── optional/
-    └── oh-my-openagent/oh-my-openagent-controlled.jsonc
+├── optional/oh-my-openagent/oh-my-openagent-controlled.jsonc
+└── .opencode/
+    ├── agent/                  # Odin team + hermes-reviewer
+    ├── command/ + commands/    # workflow, /learn, /hermes-curate
+    ├── skills/                 # native YAML-frontmatter skills
+    ├── tools/
+    │   ├── memory.ts
+    │   └── evolution.ts
+    ├── lib/evolution-core.ts
+    ├── plugins/
+    │   ├── memory-lifecycle.plugin.ts
+    │   ├── research-learn-loop.plugin.ts
+    │   └── hermes-self-evolution.plugin.ts
+    ├── evolution/
+    │   ├── mcp/                # reviewed, disabled-first fragments
+    │   └── proposals/          # non-live plugin/hook proposals
+    └── memory/                 # per-project experience database
 ```
 
-## 安裝到你的專案
+本地 `.opencode/plugins/*.ts` 由 OpenCode 自動探索，所以 `opencode.jsonc`
+不重複列出相同路徑，避免同一 plugin 執行多次。
+
+## 安裝
+
+### 安裝到單一專案
 
 Windows PowerShell：
 
 ```powershell
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-.\install.ps1 -ProjectPath "E:\your-project"
+.\install.ps1 -Scope Project -ProjectPath "E:\your-project" -WhatIf
+.\install.ps1 -Scope Project -ProjectPath "E:\your-project"
 ```
 
 Linux/macOS/Git Bash：
 
 ```bash
-chmod +x ./install.sh
-./install.sh /path/to/your-project
+./install.sh --scope project --project-path /path/to/project --dry-run
+./install.sh --scope project --project-path /path/to/project
 ```
 
-若直接在專案根目錄執行：
+### 安裝到使用者層 OpenCode
+
+全域安裝只新增 auto-discovered agents、commands、skills、tools、plugins
+與支援檔；它不覆寫既有全域 `AGENTS.md` 或 `opencode.jsonc`。
+
+```powershell
+.\install.ps1 -Scope Global -WhatIf
+.\install.ps1 -Scope Global
+```
 
 ```bash
-./install.sh .
+./install.sh --scope global --dry-run
+./install.sh --scope global
 ```
 
-## 使用方式
+同名檔案會先備份到目標下的
+`.controlled-workflow-backups/<timestamp>/`。資料庫、WAL、vector index、
+review logs、curator archive/backup 等 runtime artifacts 不會被當成模板複製。
 
-進入 OpenCode 後：
+安裝或修改 config-time 檔案後，必須完整退出並重新啟動 OpenCode。
+
+## 使用
 
 ```text
-/start-work 實作 XXX 功能，完成後請驗證
+/start-work 實作 XXX 功能，完成後驗證
+/controlled-workflow 修復所有測試失敗，直到驗證通過
+/research-fix Windows CMake C4819
+/learn from ./docs/internal-api
+/learn https://example.com/official-docs
+/hermes-curate
+/ralph-loop 完成到可 build、可 test；驗證後才輸出 <promise>DONE</promise>
 ```
 
-或更強制：
+Evolution tools：
 
-```text
-/controlled-workflow 修復所有測試失敗，直到測試通過才停止
+- `evolution_inspect`：列出或讀取資產與 SHA-256。
+- `evolution_skill`：建立/更新 native OpenCode skill。
+- `evolution_support`：寫入 skill 的 references/templates/scripts/assets。
+- `evolution_integration`：註冊 disabled MCP 或建立 plugin/hook proposal。
+- `evolution_curate`：dry-run 或備份後封存 Hermes-created skills。
+
+Memory tools：
+
+- `memory_search`：以關鍵字、類型、tags 搜尋。
+- `memory_read`：依 ID 讀取完整記錄。
+- `memory_add`：新增 success/failure/pattern/decision/research/note。
+- `memory_list`：顯示總數、類型分佈與最近記錄。
+
+## 與官方 oh-my-openagent 共存
+
+若已使用官方 runtime，將
+[`optional/oh-my-openagent/oh-my-openagent-controlled.jsonc`](optional/oh-my-openagent/oh-my-openagent-controlled.jsonc)
+複製為 `.opencode/oh-my-openagent.jsonc`。該檔使用直接 snake_case schema：
+`team_mode`、`ralph_loop`、`disabled_hooks`，不再使用舊版 wrapper 或
+camelCase 假想欄位。
+
+本安裝器不會自動安裝、移除或替換官方 runtime，也不會停用主人現有的
+`oh-my-opencode-slim`；這些會改變整個 OpenCode runtime 的操作需要另外明確決定。
+
+## 驗證
+
+```powershell
+node scripts\validate.mjs .
+bun test tests\evolution-core.test.ts tests\memory-db.test.ts tests\plugin-lifecycle.test.ts tests\installers.test.ts
+opencode debug config
+opencode debug skill
+opencode agent list
+opencode mcp list
 ```
 
-或 Ralph-style：
+OpenCode CLI 會共用 SQLite；診斷指令應逐項執行，不要同時啟動多個
+`opencode` process，否則可能出現 `database is locked`。
 
-```text
-/ralph-loop 將專案完成到可 build、可 test、可提交；完成時輸出 <promise>DONE</promise>
-```
+## 限制
 
-## Auto Continue 的核心
-
-本包的 hook 範本使用以下流程：
-
-```text
-session.idle
-  -> 讀取 todos
-  -> 若仍有 pending / in_progress
-  -> 檢查是否正在等使用者、背景任務、冷卻、停滯、連續錯誤
-  -> 注入 internal continuation prompt
-  -> 同一 session 繼續工作
-```
-
-預設守門條件：
-
-- 沒有 todo 或全部完成：停止。
-- 使用者明確 stop/cancel：停止。
-- agent 正在等使用者回答：停止。
-- 連續沒有進展：停止。
-- 連續失敗超過上限：停止。
-- 權限、認證、token limit、環境缺失：停止並報告。
-
-## 重要聲明
-
-此包不是 oh-my-openagent 的完整替代品，也沒有包含上游完整 plugin。它是 OpenCode controlled workflow 的輕量整合版：agent prompt 為重寫版，hook 為可移植範本。若你已安裝 oh-my-openagent，可使用 `optional/oh-my-openagent/oh-my-openagent-controlled.jsonc` 作為相容設定參考。
-
-
-## 新增：Research → Try → Learn 自我改進層
-
-這版新增一組 workflow skills 與 SQLite 記憶系統：
-
-```text
-.opencode/skills/
-├── research-discovery/SKILL.md
-├── community-research/SKILL.md
-├── mcp-skill-scout/SKILL.md
-├── solution-trial-loop/SKILL.md
-├── experience-ledger/SKILL.md
-└── self-improvement/SKILL.md
-
-.opencode/memory/
-├── memory.db           ← SQLite 資料庫（主要儲存）
-├── success-ledger.md   ← 保留為人類可讀快照
-├── failure-ledger.md
-├── ...
-```
-
-新增指令：
-
-```text
-/research-fix <問題或錯誤>
-/learned-fix <問題或錯誤>
-/mcp-scout <任務>
-/try-solutions <候選方法>
-/retrospective
-/knowledge-sync
-```
-
-推薦用法：
-
-```text
-/research-fix 修復 Windows CMake build 失敗，先找過去成功紀錄、官方文件、GitHub issue 與社群方法，逐一嘗試並記錄成功/失敗經驗
-```
-
-## OpenCode 規範調整
-
-- Custom commands 使用 `.opencode/commands/*.md`；同時保留 `.opencode/command/*.md` 相容舊包。
-- Plugin 參考實作放在 `.opencode/plugins/research-learn-loop.plugin.ts`；同時保留 `.opencode/hooks/` 作為 hook 概念與相容參考。
-- Skills 使用 `.opencode/skills/<name>/SKILL.md`。
-
-## 安全提醒
-
-社群搜尋與 MCP 使用必須遵守：
-
-- 不把 secrets、tokens、私有 repo 內容、完整私有 log 傳到外部。
-- MCP 若能改檔、發 PR、改 issue、碰雲端或資料庫，必須得到明確授權。
-- 社群答案只能當候選方法，本地驗證通過後才記入成功紀錄。
-
-## SQLite 記憶系統（取代舊版 Markdown Ledgers）
-
-記憶系統使用 **SQLite**（`sql.js` WASM，無原生相依）取代舊的分散式 Markdown 檔案。進入 OpenCode 後，agent 可以直接呼叫：
-
-```text
-memory_search  # SQLite 全文搜尋成功/失敗/決策/研究紀錄
-memory_read    # 依 id 讀取完整記憶 entry
-memory_add     # 新增成功、失敗、模式、決策、研究來源、備註
-memory_list    # 列出記憶庫摘要（總數、類型分佈、最近 5 筆）
-```
-
-核心檔案：
-
-```text
-.opencode/tools/memory.ts         ← SQLite/JSON 雙模記憶工具（動態載入 sql.js）
-.opencode/lib/memory-db.ts        ← 共享 SQLite 資料庫模組（非工具，不會被 OpenCode 掃描）
-.opencode/lib/migrate-to-sqlite.ts   ← 從 Markdown 遷移到 SQLite（非工具）
-.opencode/memory/memory.db        ← SQLite 資料庫
-.opencode/plugins/memory-lifecycle.plugin.ts
-.opencode/skills/persistent-memory/SKILL.md
-docs/memory-tools-and-plugins.md
-```
-
-推薦工作流：
-
-```text
-/memory-first Windows CMake C4819 warning opencode permission loop
-```
-
-然後要求 agent：
-
-```text
-先用 memory_search 查過去成功紀錄與失敗紀錄，再嘗試修法；成功後用 memory_add type=success 記錄證據，失敗也用 memory_add type=failure 記錄。
-```
-
-Memory plugin 預設保守啟用：它會在 session created / idle / compacted 等 lifecycle 事件留下 audit 或提醒；不同 OpenCode 版本的 SDK 注入 API 可能不同，所以 prompt injection 採 defensive 寫法，不會阻塞正常工作。
+- OpenCode child session 仍會保存在 OpenCode session DB；它不像 Hermes
+  Agent 的 `_persist_disabled` 能完全不落盤。因此本實作限制 transcript
+  長度、先遮蔽 secret-like 內容，並隔離 tool permissions。
+- Plugin/hook proposal 的啟用仍需要 foreground review 與 OpenCode restart。
+- 此包只對齊上游公開行為與目前 OpenCode API，不宣稱包含上游全部功能。

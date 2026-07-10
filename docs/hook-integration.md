@@ -1,9 +1,10 @@
 # Hook Integration — Auto Continue + Ralph Loop Lite
 
-本包整合兩種 continuation pattern：
+本包整合三種 session lifecycle pattern：
 
 1. **Todo Continuation**：OpenCode session idle 時，若 todo 尚未完成，注入一段 internal prompt 繼續下一項任務。
 2. **Promise Loop**：使用 `<promise>DONE</promise>` 當完成標記。未看到 promise 且未被 blocker 停止，就繼續下一輪。
+3. **Hermes Review**：有 durable signal 的 main session idle 後，建立受限 child session 審查記憶與技能。
 
 ## 為什麼需要 hook
 
@@ -19,22 +20,23 @@ session.idle event
 
 ## Lite guard 設計
 
-`.opencode/hooks/lite-auto-continue.plugin.ts` 內建以下保護：
+實際載入的 `.opencode/plugins/research-learn-loop.plugin.ts` 內建以下保護：
 
 - cooldown：避免短時間重複注入。
 - stagnation：相同 todo 多輪無進展時停止。
 - failure counter：連續注入失敗達上限停止。
-- max iterations：避免無限 loop。
-- skip read-only agents：Explore/Librarian/Merlin/Solomon/Athena 等唯讀角色不自動推進。
+- SDK response normalization：正確處理 `{ data, error }`。
+- child-session guard：subagent / Hermes review session 不再觸發主迴圈。
+- abort/token/compaction guard：取消、context overflow 或剛壓縮時不重試。
 - stop patterns：遇到 `BLOCKED:`、`PERMISSION_REQUIRED:`、`TOKEN_LIMIT:` 等停止。
 - waiting-for-user detection：看到需要使用者確認時停止。
 
 ## 建議啟用方式
 
-1. 先只使用 agent/command，不啟用 hook。
-2. 在小型 repo 中測試 `.opencode/hooks/lite-auto-continue.plugin.ts`。
-3. 確認你的 OpenCode/plugin SDK 的事件與 prompt API 名稱。
-4. 逐步放寬權限，不要一開始允許 destructive command。
+1. 使用 `opencode debug config` 確認 plugins 可載入。
+2. 在小型 repo 建立未完成 todo，觀察一次 idle continuation。
+3. 測試 pending question、abort、token limit 與 compaction 停止條件。
+4. 保持 destructive command 權限為 deny/ask。
 
 ## Continuation Prompt
 
@@ -62,7 +64,9 @@ Stop only when all todos are completed/cancelled or a real blocker exists.
 
 ## 注意
 
-`lite-auto-continue.plugin.ts` 是 clean-room 參考 adapter。不同 OpenCode 版本的 plugin API 可能不同，你需要依本機版本調整 `ctx.events`、`client.session.todo`、`client.session.messages`、`client.session.promptAsync` 等呼叫名稱。
+`.opencode/hooks/lite-auto-continue.plugin.ts` 保留為概念參考；OpenCode
+實際 auto-discover 的版本位於 `.opencode/plugins/`，使用目前的 `event`
+hook、`client.session.todo/messages/promptAsync` 與 directory query。
 
 ## Research Learn Loop Plugin
 
@@ -72,3 +76,14 @@ The previous auto-continue hook can be extended with a memory-first research lay
 - `.opencode/plugins/research-learn-loop.config.jsonc`
 
 The plugin prompt tells the continuing agent to first search `.opencode/memory/`, then use research and trial-loop skills before making repeated changes. This keeps auto-continue from repeating the same failed method.
+
+## Hermes Review Plugin
+
+`.opencode/plugins/hermes-self-evolution.plugin.ts` 會：
+
+- 只審查 main session，並用 cooldown/message-count 去重。
+- 建立帶 `parentID` 的隔離 child session。
+- 限制 child tools 與 session permissions。
+- 對 transcript 做長度限制與 secret-like redaction。
+- 將 MCP fragments 透過 `config` hook 合併；預設 disabled。
+- 將完成摘要寫入 ignored runtime JSONL，不污染 tracked ledger。

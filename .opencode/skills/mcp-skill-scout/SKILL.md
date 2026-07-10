@@ -1,3 +1,8 @@
+---
+name: mcp-skill-scout
+description: Use when a task may benefit from configured MCP servers, reusable OpenCode skills, local documentation, or external tool integrations and their risks must be assessed first.
+---
+
 # MCP + Skill Scout
 
 Use this skill when a task may be solved faster by available MCP tools, reusable OpenCode skills, local docs, or external tool integrations.

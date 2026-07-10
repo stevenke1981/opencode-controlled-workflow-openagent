@@ -1,3 +1,8 @@
+---
+name: solution-trial-loop
+description: Use after research produces multiple candidate methods to test one hypothesis at a time with a baseline, rollback plan, verification, and retained or reverted decision.
+---
+
 # Solution Trial Loop
 
 Use this skill after Research Discovery has produced multiple possible methods. Try methods one by one, with rollback and evidence.

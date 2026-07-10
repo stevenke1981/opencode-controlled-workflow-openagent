@@ -2,7 +2,7 @@
  * Migration script: Markdown memory entries → SQLite database
  *
  * Usage:
- *   node -e "require('./migrate-to-sqlite').migrate()"
+ *   bun -e "import { migrate } from './.opencode/lib/migrate-to-sqlite.ts'; await migrate()"
  *
  * Scans .opencode/memory/entries/*.md, success-ledger.md, failure-ledger.md,
  * patterns.md, decision-log.md, research-sources.md, and solution-index.md
@@ -108,18 +108,13 @@ async function migrateFromFile(root: string, filePath: string, defaultType?: str
     for (const entry of entries) {
       const id = entry.id || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
       // Check if already migrated
-      const existing = db.prepare("SELECT id FROM memories WHERE id = ?")
-      existing.bind([id])
-      if (existing.step()) {
-        existing.free()
-        continue
-      }
-      existing.free()
+      const existing = db.query("SELECT id FROM memories WHERE id = ?").get(id)
+      if (existing) continue
 
-      db.run(
+      db.query(
         `INSERT OR IGNORE INTO memories (id, type, title, problem, context, solution, evidence, tags, source, status, session_id, agent, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
+      ).run(
           id,
           entry.type || defaultType || "note",
           entry.title || "untitled",
@@ -134,7 +129,6 @@ async function migrateFromFile(root: string, filePath: string, defaultType?: str
           entry.agent || "",
           entry.created_at || nowIso(),
           nowIso(),
-        ],
       )
       count++
     }

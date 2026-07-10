@@ -1,3 +1,8 @@
+---
+name: community-research
+description: Use when official documentation is incomplete and GitHub issues, discussions, Stack Overflow, forums, or other community evidence can supply candidate solutions.
+---
+
 # Community Research Skill
 
 Use this skill to search non-official sources safely when official documentation is incomplete or the error is ecosystem-specific.

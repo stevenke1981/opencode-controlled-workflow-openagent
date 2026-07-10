@@ -2,10 +2,10 @@
  * OpenCode Persistent Memory Tool
  *
  * Dual-mode backend:
- *   1. SQLite via sql.js (primary, faster, full-text search)
+ *   1. SQLite via OpenCode's Bun runtime (primary, zero dependencies)
  *   2. JSON file fallback (zero dependencies, always works)
  *
- * If sql.js is unavailable, the tool degrades gracefully to JSON storage.
+ * If Bun SQLite is unavailable, the tool degrades gracefully to JSON storage.
  * The tool always returns empty strings to avoid cluttering the OpenCode UI.
  */
 import { tool } from "@opencode-ai/plugin"
@@ -76,17 +76,9 @@ interface Backend {
 
 async function createSqliteBackend(root: string): Promise<Backend | null> {
   try {
-    const initSqlJs = (await import("sql.js")).default
-    const SQL = await initSqlJs()
+    const { Database } = await import("bun:sqlite")
     const dbf = path.join(root, DB_FILE)
-    let db: any
-
-    try {
-      const buffer = await readFile(dbf)
-      db = new SQL.Database(buffer)
-    } catch {
-      db = new SQL.Database()
-    }
+    const db = new Database(dbf, { create: true })
 
     const SCHEMA = `
       CREATE TABLE IF NOT EXISTS memories (
@@ -108,22 +100,16 @@ async function createSqliteBackend(root: string): Promise<Backend | null> {
       CREATE INDEX IF NOT EXISTS idx_memories_type ON memories(type);
       CREATE INDEX IF NOT EXISTS idx_memories_created ON memories(created_at);
     `
-    db.run(SCHEMA)
-
-    async function persist(): Promise<void> {
-      const data = db.export()
-      await writeFile(dbf, Buffer.from(data))
-    }
+    db.exec("PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;")
+    db.exec(SCHEMA)
 
     return {
       async insert(row) {
-        db.run(
+        db.query(
           `INSERT INTO memories (id, type, title, problem, context, solution, evidence, tags, source, status, session_id, agent, created_at, updated_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [row.id, row.type, row.title, row.problem, row.context, row.solution, row.evidence,
-           row.tags, row.source, row.status, row.session_id, row.agent, row.created_at, row.updated_at],
-        )
-        await persist()
+        ).run(row.id, row.type, row.title, row.problem, row.context, row.solution, row.evidence,
+          row.tags, row.source, row.status, row.session_id, row.agent, row.created_at, row.updated_at)
       },
 
       async search({ type, terms, tags, limit }) {
@@ -157,58 +143,23 @@ async function createSqliteBackend(root: string): Promise<Backend | null> {
                             tags, status, source, created_at
                      FROM memories ${where} ORDER BY created_at DESC LIMIT ?`
         params.push(String(limit))
-
-        const stmt = db.prepare(sql)
-        stmt.bind(params)
-        const rows: any[] = []
-        while (stmt.step()) {
-          rows.push(stmt.getAsObject())
-        }
-        stmt.free()
-        return rows
+        return db.query(sql).all(...params) as any[]
       },
 
       async readById(id) {
-        const stmt = db.prepare("SELECT * FROM memories WHERE id = ?")
-        stmt.bind([id])
-        if (!stmt.step()) { stmt.free(); return null }
-        const row = stmt.getAsObject() as MemoryRow
-        stmt.free()
-        return row
+        return (db.query("SELECT * FROM memories WHERE id = ?").get(id) as MemoryRow | null) ?? null
       },
 
       async listAll(limit) {
-        const stmt = db.prepare("SELECT id, type, title, status, tags, created_at FROM memories ORDER BY created_at DESC LIMIT ?")
-        stmt.bind([String(limit)])
-        const rows: any[] = []
-        while (stmt.step()) {
-          rows.push(stmt.getAsObject())
-        }
-        stmt.free()
-        return rows
+        return db.query("SELECT id, type, title, status, tags, created_at FROM memories ORDER BY created_at DESC LIMIT ?").all(limit) as any[]
       },
 
       async countByType() {
-        const stmt = db.prepare("SELECT type, count(*) as count FROM memories GROUP BY type")
-        const rows: { type: string; count: number }[] = []
-        while (stmt.step()) {
-          const r = stmt.getAsObject() as { type: string; count: number }
-          rows.push(r)
-        }
-        stmt.free()
-        return rows
+        return db.query("SELECT type, count(*) as count FROM memories GROUP BY type").all() as { type: string; count: number }[]
       },
 
       async totalCount() {
-        const stmt = db.prepare("SELECT count(*) as c FROM memories")
-        stmt.bind([])
-        if (stmt.step()) {
-          const r = stmt.getAsObject() as { c: number }
-          stmt.free()
-          return r.c
-        }
-        stmt.free()
-        return 0
+        return Number((db.query("SELECT count(*) as c FROM memories").get() as { c?: number } | null)?.c ?? 0)
       },
     }
   } catch {
@@ -345,7 +296,7 @@ function buildRow(args: any, ctx?: ToolContext, type?: MemoryType): MemoryRow {
   const now = new Date().toISOString()
   const id = `${Date.now().toString(36)}-${crypto.randomBytes(3).toString("hex")}`
   const tags = (args.tags || []).map((t: string) => t.trim()).filter(Boolean).join(",")
-  return {
+  const row = {
     id,
     type: type || args.type as string,
     title: args.title.trim(),
@@ -361,6 +312,14 @@ function buildRow(args: any, ctx?: ToolContext, type?: MemoryType): MemoryRow {
     created_at: now,
     updated_at: now,
   }
+  const searchable = Object.entries(row)
+    .filter(([key]) => !["id", "created_at", "updated_at"].includes(key))
+    .map(([key, value]) => `${key}=${value}`)
+    .join("\n")
+  if (/\b(?:sk|ghp|github_pat|xox[baprs])-[-A-Za-z0-9_]{12,}\b|Bearer\s+[A-Za-z0-9._~+\/-]{12,}|(?:api[_-]?key|token|password|authorization)\s*[:=]\s*(?!\$\{|\{env:)[^\s,;]+/i.test(searchable)) {
+    throw new Error("Memory entry rejected: secret-like content must be redacted")
+  }
+  return row
 }
 
 // ─── Tools ────────────────────────────────────────────────────────────
@@ -382,7 +341,7 @@ export const add = tool({
     const backend = await getBackend(ctx)
     const row = buildRow(args, ctx, args.type as MemoryType)
     await backend.insert(row)
-    return ""
+    return `memory_add: stored ${row.id} [${row.type}] ${row.title}`
   },
 })
 
@@ -442,6 +401,14 @@ export const list = tool({
   description: "List memory summary: entry count by type, total entries, and database info.",
   args: {},
   async execute(_args, ctx: ToolContext) {
-    return "" // Silent — no UI clutter
+    const backend = await getBackend(ctx)
+    const [total, counts, recent] = await Promise.all([
+      backend.totalCount(),
+      backend.countByType(),
+      backend.listAll(5),
+    ])
+    const countText = counts.length ? counts.map((item) => `${item.type}=${item.count}`).join(", ") : "empty"
+    const recentText = recent.length ? `\n${recent.map((item) => `- ${item.id} [${item.type}] ${item.title}`).join("\n")}` : ""
+    return `memory_list: total=${total}; ${countText}${recentText}`
   },
 })

@@ -1,3 +1,8 @@
+---
+name: opencode-qa-lite
+description: Use when creating, reviewing, installing, or validating OpenCode agents, commands, skills, plugins, hooks, MCP configuration, permissions, or local workflow packages.
+---
+
 # OpenCode QA Lite Skill
 
 Use this skill to keep local OpenCode team configuration healthy.

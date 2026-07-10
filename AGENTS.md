@@ -180,3 +180,16 @@ memory_search query="..." tags=["windows","cmake"]
 - 重要取捨：`memory_add type=decision`。
 
 禁止把 API key、token、密碼、私有 URL、完整私有 log、個資或機密內容寫入 memory。
+
+## Hermes Evolution Tools
+
+當任務要求學習、建立/更新 skill、加入 MCP、plugin、hook，或整理過時技能時：
+
+1. 先用 `memory_search` 與 `evolution_inspect` 查重並取得目前 SHA-256。
+2. 既有 skill/support/integration 更新必須帶 `expectedHash`，不可 blind overwrite。
+3. MCP 只能寫入無 secrets 的 disabled fragment；驗證後再由 foreground 明確啟用。
+4. Plugin/hook 預設只建立 proposal；live executable write 必須有使用者明確意圖、foreground review 與 restart 計畫。
+5. Background `hermes-reviewer` 永遠不能啟用 executable plugin/hook，也只能 curator dry-run。
+6. Curator apply 只處理 `metadata.created_by: hermes-review`，並在 archive 前建立備份。
+
+使用 `/learn <source>` 進行受控學習，使用 `/hermes-curate` 檢視技能生命週期。

@@ -1,133 +1,141 @@
+[CmdletBinding(SupportsShouldProcess)]
 param(
-  [string]$ProjectPath = "."
+  [ValidateSet("Project", "Global")]
+  [string]$Scope = "Project",
+  [string]$ProjectPath = ".",
+  [string]$OpenCodeConfigPath = (Join-Path $HOME ".config\opencode")
 )
 
 $ErrorActionPreference = "Stop"
 $Source = Split-Path -Parent $MyInvocation.MyCommand.Path
-$Target = (Resolve-Path $ProjectPath).Path
+$SourceOpenCode = Join-Path $Source ".opencode"
 $Timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
 
-function Remove-JsoncComments {
-  param([Parameter(Mandatory)][string]$Text)
-
-  $builder = [System.Text.StringBuilder]::new()
-  $inString = $false
-  $inLineComment = $false
-  $inBlockComment = $false
-  $escaped = $false
-
-  for ($i = 0; $i -lt $Text.Length; $i++) {
-    $ch = $Text[$i]
-    $next = if ($i + 1 -lt $Text.Length) { $Text[$i + 1] } else { [char]0 }
-
-    if ($inLineComment) {
-      if ($ch -eq "`n") {
-        $inLineComment = $false
-        [void]$builder.Append($ch)
-      }
-      continue
-    }
-    if ($inBlockComment) {
-      if ($ch -eq "*" -and $next -eq "/") {
-        $inBlockComment = $false
-        $i++
-      }
-      continue
-    }
-    if ($inString) {
-      [void]$builder.Append($ch)
-      if ($escaped) { $escaped = $false }
-      elseif ($ch -eq "\") { $escaped = $true }
-      elseif ($ch -eq '"') { $inString = $false }
-      continue
-    }
-
-    if ($ch -eq '"') {
-      $inString = $true
-      [void]$builder.Append($ch)
-    }
-    elseif ($ch -eq "/" -and $next -eq "/") {
-      $inLineComment = $true
-      $i++
-    }
-    elseif ($ch -eq "/" -and $next -eq "*") {
-      $inBlockComment = $true
-      $i++
-    }
-    else {
-      [void]$builder.Append($ch)
-    }
-  }
-
-  $builder.ToString()
+if (-not (Test-Path -LiteralPath $SourceOpenCode -PathType Container)) {
+  throw "Package source is missing: $SourceOpenCode"
 }
 
-Write-Host "Installing OpenCode Controlled Workflow to $Target"
-
-if ($Source -ne $Target) {
-  $TargetOpenCode = Join-Path $Target ".opencode"
-  if (Test-Path $TargetOpenCode) {
-    $Backup = Join-Path $Target ".opencode.backup-$Timestamp"
-    Write-Host "Backing up existing .opencode to $Backup"
-    Copy-Item $TargetOpenCode $Backup -Recurse -Force
-  }
-  Copy-Item (Join-Path $Source ".opencode") $Target -Recurse -Force
-  Copy-Item (Join-Path $Source "AGENTS.md") (Join-Path $Target "AGENTS.md") -Force
+if ($Scope -eq "Global") {
+  $TargetRoot = [System.IO.Path]::GetFullPath($OpenCodeConfigPath)
+  $TargetOpenCode = $TargetRoot
 }
 else {
-  Write-Host "Source and target are the same directory; skipping file copy."
+  $TargetRoot = (Resolve-Path -LiteralPath $ProjectPath).Path
+  $TargetOpenCode = Join-Path $TargetRoot ".opencode"
 }
 
-$TargetConfig = Join-Path $Target "opencode.jsonc"
-$SourceConfig = Join-Path $Source "opencode.jsonc"
+$BackupRoot = Join-Path $TargetRoot ".controlled-workflow-backups\$Timestamp"
+$RuntimePatterns = @(
+  '^memory/memory\.db(?:-shm|-wal)?$',
+  '^memory/memory-fallback\.json$',
+  '^memory/\.runtime/',
+  '^memory/tool-audit\.md$',
+  '^memory\.db(?:-shm|-wal)?$',
+  '^tantivy/',
+  '^vectors\.usearch$',
+  '^status-footer/state\.json$',
+  '^evolution/(?:backups|reviews|archive)/',
+  '^evolution/(?:state|usage)\.json$'
+)
 
-if (Test-Path $TargetConfig) {
-  $ConfigBackup = "$TargetConfig.backup-$Timestamp"
-  Copy-Item $TargetConfig $ConfigBackup -Force
-  Write-Host "Backed up existing config to $ConfigBackup"
+function Test-RuntimeArtifact {
+  param([Parameter(Mandatory)][string]$RelativePath)
+  $normalized = $RelativePath.Replace('\', '/')
+  return @($RuntimePatterns | Where-Object { $normalized -match $_ }).Count -gt 0
+}
 
-  try {
-    $raw = Get-Content $TargetConfig -Raw
-    $tgt = (Remove-JsoncComments -Text $raw) | ConvertFrom-Json
-    $existing = @($tgt.plugin | ForEach-Object { "$_" })
-    $desired = @(
-      ".opencode/plugins/memory-lifecycle.plugin.ts",
-      ".opencode/plugins/research-learn-loop.plugin.ts"
-    )
+function Test-PackageAsset {
+  param([Parameter(Mandatory)][string]$RelativePath)
+  $normalized = $RelativePath.Replace('\', '/')
+  return $normalized -match '^(?:agent|command|commands|hooks|lib|plugins|skills|tools|memory)/'
+}
 
-    foreach ($plugin in $desired) {
-      $name = Split-Path $plugin -Leaf
-      if (-not ($existing | Where-Object { (Split-Path $_ -Leaf) -eq $name })) {
-        $existing += $plugin
-      }
+function Backup-And-CopyFile {
+  param(
+    [Parameter(Mandatory)][string]$SourceFile,
+    [Parameter(Mandatory)][string]$DestinationFile,
+    [Parameter(Mandatory)][string]$BackupRelative
+  )
+
+  if (Test-Path -LiteralPath $DestinationFile -PathType Leaf) {
+    $backup = Join-Path $BackupRoot $BackupRelative
+    if ($PSCmdlet.ShouldProcess($backup, "Back up existing file")) {
+      New-Item -ItemType Directory -Path (Split-Path -Parent $backup) -Force | Out-Null
+      Copy-Item -LiteralPath $DestinationFile -Destination $backup -Force
     }
-
-    $tgt | Add-Member -NotePropertyName plugin -NotePropertyValue $existing -Force
-    $temp = "$TargetConfig.tmp-$PID"
-    $tgt | ConvertTo-Json -Depth 100 | Set-Content -Path $temp -Encoding utf8
-    Move-Item $temp $TargetConfig -Force
-    Write-Host "Safely merged plugins into opencode.jsonc"
   }
-  catch {
-    Copy-Item $ConfigBackup $TargetConfig -Force
-    throw "Existing opencode.jsonc could not be parsed safely. Original restored. $($_.Exception.Message)"
+
+  if ($PSCmdlet.ShouldProcess($DestinationFile, "Install controlled-workflow asset")) {
+    New-Item -ItemType Directory -Path (Split-Path -Parent $DestinationFile) -Force | Out-Null
+    Copy-Item -LiteralPath $SourceFile -Destination $DestinationFile -Force
+  }
+}
+
+Write-Host "Installing OpenCode Controlled Workflow ($Scope scope) to $TargetRoot"
+
+$sourceResolved = [System.IO.Path]::GetFullPath($SourceOpenCode).TrimEnd('\')
+$targetResolved = [System.IO.Path]::GetFullPath($TargetOpenCode).TrimEnd('\')
+if ($sourceResolved -ne $targetResolved) {
+  Get-ChildItem -LiteralPath $SourceOpenCode -Recurse -File | ForEach-Object {
+    # Windows PowerShell 5.1 targets .NET Framework, which does not provide
+    # System.IO.Path.GetRelativePath. Every enumerated file is already a child
+    # of $SourceOpenCode, so a prefix trim is deterministic and traversal-safe.
+    $relative = $_.FullName.Substring($SourceOpenCode.Length).TrimStart('\', '/')
+    if ((Test-PackageAsset -RelativePath $relative) -and -not (Test-RuntimeArtifact -RelativePath $relative)) {
+      Backup-And-CopyFile `
+        -SourceFile $_.FullName `
+        -DestinationFile (Join-Path $TargetOpenCode $relative) `
+        -BackupRelative (Join-Path "opencode" $relative)
+    }
   }
 }
 else {
-  Copy-Item $SourceConfig $TargetConfig -Force
+  Write-Host "Source and target OpenCode directories are identical; package copy skipped."
+}
+
+if ($Scope -eq "Project") {
+  $targetAgents = Join-Path $TargetRoot "AGENTS.md"
+  if ([System.IO.Path]::GetFullPath($Source) -ne [System.IO.Path]::GetFullPath($TargetRoot)) {
+    Backup-And-CopyFile -SourceFile (Join-Path $Source "AGENTS.md") -DestinationFile $targetAgents -BackupRelative "AGENTS.md"
+  }
+
+  $targetConfig = Join-Path $TargetRoot "opencode.jsonc"
+  if (-not (Test-Path -LiteralPath $targetConfig)) {
+    if ($PSCmdlet.ShouldProcess($targetConfig, "Install project OpenCode config")) {
+      Copy-Item -LiteralPath (Join-Path $Source "opencode.jsonc") -Destination $targetConfig
+    }
+  }
+  else {
+    Write-Host "Preserved existing opencode.jsonc; local plugins are auto-discovered."
+  }
+}
+else {
+  Write-Host "Preserved global AGENTS.md and opencode.jsonc; installed additive auto-discovered assets only."
+}
+
+if ($WhatIfPreference) {
+  Write-Host "Dry-run complete; no files changed."
+  return
 }
 
 $required = @(
-  ".opencode\tools\memory.ts",
-  ".opencode\lib\memory-db.ts",
-  ".opencode\lib\migrate-to-sqlite.ts",
-  ".opencode\plugins\memory-lifecycle.plugin.ts",
-  ".opencode\plugins\research-learn-loop.plugin.ts"
+  "tools\memory.ts",
+  "tools\evolution.ts",
+  "lib\evolution-core.ts",
+  "plugins\memory-lifecycle.plugin.ts",
+  "plugins\research-learn-loop.plugin.ts",
+  "plugins\hermes-self-evolution.plugin.ts",
+  "agent\hermes-reviewer.md",
+  "skills\self-improvement\SKILL.md",
+  "command\learn.md"
 )
-$missing = @($required | Where-Object { -not (Test-Path (Join-Path $Target $_)) })
+$missing = @($required | Where-Object { -not (Test-Path -LiteralPath (Join-Path $TargetOpenCode $_) -PathType Leaf) })
 if ($missing.Count -gt 0) {
-  throw "Missing required files: $($missing -join ', ')"
+  throw "Installation incomplete; missing: $($missing -join ', ')"
 }
 
-Write-Host "Required tools, libraries, and plugins verified."
-Write-Host "Done. Try: opencode run ""/controlled-workflow review this repo"""
+Write-Host "Installed and verified required tools, skills, agents, plugins, hooks, and commands."
+if (Test-Path -LiteralPath $BackupRoot) {
+  Write-Host "Backups: $BackupRoot"
+}
+Write-Host "Restart OpenCode, then run: opencode debug skill"

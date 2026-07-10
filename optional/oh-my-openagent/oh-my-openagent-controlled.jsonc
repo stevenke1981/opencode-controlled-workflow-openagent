@@ -1,32 +1,25 @@
 {
-  // Optional example if you already use oh-my-openagent.
-  // Keep this as reference only; exact keys may change by plugin version.
-  "oh-my-openagent": {
-    "mode": "controlled-workflow-lite",
-    "teamMode": {
-      "enabled": true,
-      "maxMembers": 6,
-      "leadAgent": "odin"
-    },
-    "hooks": {
-      "todo-continuation-enforcer": {
-        "enabled": true,
-        "cooldownMs": 5000,
-        "countdownSeconds": 2,
-        "maxStagnationCount": 3,
-        "maxConsecutiveFailures": 5
-      },
-      "ralph-loop": {
-        "enabled": true,
-        "completionPromise": "<promise>DONE</promise>",
-        "maxIterations": 30
-      }
-    },
-    "guardrails": {
-      "stopWhenWaitingForUser": true,
-      "stopOnPermissionRequired": true,
-      "stopOnTokenLimit": true,
-      "denyDestructiveCommands": true
-    }
-  }
+  // Optional project config for the official oh-my-openagent runtime.
+  // Verified against upstream commit fb74d777 (2026-07-11). Copy this file to
+  // `.opencode/oh-my-openagent.jsonc`; do not nest it under an
+  // `oh-my-openagent` key.
+  "$schema": "https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/dev/assets/oh-my-opencode.schema.json",
+
+  "team_mode": {
+    "enabled": true,
+    "max_parallel_members": 4,
+    "max_members": 6,
+    "max_wall_clock_minutes": 120
+  },
+
+  "ralph_loop": {
+    "enabled": true,
+    "default_max_iterations": 30,
+    "default_strategy": "continue"
+  },
+
+  // Keep upstream continuation and safety hooks enabled. Hooks are disabled
+  // only by listing them in `disabled_hooks`.
+  "disabled_hooks": [],
+  "telemetry": false
 }

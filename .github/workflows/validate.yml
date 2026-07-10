@@ -17,7 +17,19 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+      - uses: oven-sh/setup-bun@v2
       - name: Validate repository structure and JSONC
         run: node scripts/validate.mjs
+      - name: Test evolution safety core
+        run: bun test tests/evolution-core.test.ts tests/memory-db.test.ts tests/plugin-lifecycle.test.ts
       - name: Check shell syntax
         run: bash -n install.sh
+
+  windows-installer:
+    runs-on: windows-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - name: Test PowerShell project/global installers
+        run: bun test tests/installers.test.ts

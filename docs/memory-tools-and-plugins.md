@@ -1,6 +1,6 @@
 # Memory Tools and Plugins
 
-This package adds persistent project memory through OpenCode custom tools and lifecycle plugins.
+This package adds persistent project memory through OpenCode custom tools and lifecycle plugins. The primary backend is OpenCode's built-in Bun SQLite runtime, so no npm dependency is required.
 
 ## Custom tools
 
@@ -45,7 +45,9 @@ Lists memory summary: total entries, count by type, and recent entries.
 - `session.idle`: can write an idle snapshot when enabled.
 - `session.compacted`: records that context was compacted and memory should preserve critical facts.
 
-The plugin is intentionally conservative. Some OpenCode SDK methods can change between versions, so prompt injection is defensive and non-fatal.
+Lifecycle events use OpenCode's `event` hook. Runtime audit is written under
+`.opencode/memory/.runtime/` (gitignored) so read-only diagnostics do not modify
+the tracked human-readable ledgers.
 
 ## Recommended loop
 
@@ -64,3 +66,8 @@ memory_add success/failure/pattern/research/decision
 ## Safety
 
 Never write secrets, tokens, passwords, private logs, or private customer data into memory. Redact sensitive content first.
+
+`memory_add` performs an additional secret-like content scan and returns the
+stored entry ID. SQLite uses WAL plus a busy timeout; nevertheless, run separate
+OpenCode CLI diagnostics sequentially because multiple processes can still
+contend on OpenCode's own databases.

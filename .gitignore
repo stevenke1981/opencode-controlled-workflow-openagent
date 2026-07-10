@@ -1,0 +1,14 @@
+# Repository indexes and OpenCode runtime state
+/.codebase-memory/
+/.opencode/memory.db*
+/.opencode/tantivy/
+/.opencode/vectors.usearch
+/.opencode/memory/memory-fallback.json
+/.opencode/memory/memory.db-shm
+/.opencode/memory/memory.db-wal
+/.opencode/memory/.runtime/
+/.opencode/evolution/backups/
+/.opencode/evolution/reviews/
+/.opencode/evolution/archive/
+/.opencode/evolution/state.json
+/.opencode/evolution/usage.json

@@ -1,3 +1,8 @@
+---
+name: research-discovery
+description: Use when a task is blocked, unfamiliar, version-sensitive, dependent on a third-party API, or has repeated failures and multiple credible solution paths must be researched before editing.
+---
+
 # Research Discovery Skill
 
 Use this skill when a task is blocked, unfamiliar, version-sensitive, or has repeated failures. The goal is to discover multiple credible solution paths before editing more code.

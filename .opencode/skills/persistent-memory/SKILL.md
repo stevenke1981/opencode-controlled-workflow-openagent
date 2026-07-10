@@ -1,3 +1,8 @@
+---
+name: persistent-memory
+description: Use before and after OpenCode, MCP, Windows, build, test, configuration, or debugging work that may benefit from prior project experience or produce reusable evidence.
+---
+
 # Persistent Memory Skill
 
 Use this skill whenever the task can benefit from previous project experience, especially build failures, dependency errors, OpenCode/Codex/OpenAgent workflow issues, MCP setup, Windows command problems, or repeated debugging loops.

@@ -1,3 +1,8 @@
+---
+name: auto-continue
+description: Use when OpenCode session.idle should safely continue incomplete todos or a promise-based loop with cooldown, stagnation, abort, and blocker guards.
+---
+
 # Auto Continue Skill
 
 This skill defines the lightweight continuation policy used by `lite-auto-continue.plugin.ts`.

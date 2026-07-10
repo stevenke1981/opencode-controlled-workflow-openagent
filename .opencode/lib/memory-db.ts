@@ -1,20 +1,14 @@
 /**
  * Shared SQLite database module for OpenCode memory system.
- * Used by tools/memory.ts and plugins/memory-lifecycle.plugin.ts
+ * Used by the one-time Markdown migration helper.
  *
- * NOTE: This file lives in .opencode/lib/ (NOT .opencode/tools/) because
- * OpenCode automatically loads all .ts files from .opencode/tools/ as custom
- * tools. Since this module uses a static import from "sql.js", placing it in
- * tools/ would crash OpenCode's tool registry when sql.js is not resolvable
- * (e.g., when accidentally copied to ~/.config/opencode/tools/).
- *
- * The actual tool entry points are in .opencode/tools/memory.ts, which uses
- * dynamic import() with try-catch so it gracefully falls back to JSON storage
- * when sql.js is unavailable.
+ * This file stays under lib/ because OpenCode treats every tools/*.ts export
+ * as a custom tool. Bun SQLite is part of the OpenCode runtime and requires no
+ * npm dependency.
  */
-import { readFile, writeFile, mkdir } from "node:fs/promises"
+import { mkdir } from "node:fs/promises"
 import path from "node:path"
-import initSqlJs, { type Database as SqlJsDatabase } from "sql.js"
+import { Database } from "bun:sqlite"
 
 export type ToolContext = {
   directory?: string
@@ -48,8 +42,7 @@ CREATE INDEX IF NOT EXISTS idx_memories_type ON memories(type);
 CREATE INDEX IF NOT EXISTS idx_memories_created ON memories(created_at);
 `
 
-let sqlPromise: ReturnType<typeof initSqlJs> | null = null
-let db: SqlJsDatabase | null = null
+let db: Database | null = null
 let dbRoot = ""
 
 export function getMemoryRoot(ctx?: ToolContext): string {
@@ -61,31 +54,22 @@ export function getDbPath(root: string): string {
   return path.join(root, DB_FILE)
 }
 
-export async function getDatabase(ctx?: ToolContext): Promise<SqlJsDatabase> {
+export async function getDatabase(ctx?: ToolContext): Promise<Database> {
   const root = getMemoryRoot(ctx)
   if (db && dbRoot === root) return db
 
   await mkdir(root, { recursive: true })
-  const SQL = sqlPromise || (sqlPromise = initSqlJs())
-  const sql = await SQL
   const dbf = getDbPath(root)
-
-  try {
-    const buffer = await readFile(dbf)
-    db = new sql.Database(buffer)
-  } catch {
-    db = new sql.Database()
-    db.run(SCHEMA)
-  }
-  db.run(SCHEMA) // Ensure schema on existing DBs
+  db = new Database(dbf, { create: true })
+  db.exec("PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;")
+  db.exec(SCHEMA)
   dbRoot = root
   return db
 }
 
 export async function saveDatabase(): Promise<void> {
-  if (!db) return
-  const data = db.export()
-  await writeFile(getDbPath(dbRoot), Buffer.from(data))
+  // Bun SQLite persists each committed statement immediately. Retained as a
+  // compatibility no-op for migrate-to-sqlite.ts.
 }
 
 export function nowIso(): string {

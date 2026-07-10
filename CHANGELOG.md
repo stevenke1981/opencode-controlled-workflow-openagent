@@ -1,5 +1,26 @@
 # Changelog
 
+## 2026-07-10 — Hermes Self-Evolution and Current OpenCode Alignment
+
+- Aligned local plugin hooks with OpenCode 1.17's `event` API and normalized
+  SDK `{ data, error }` responses.
+- Added isolated `hermes-reviewer` child sessions with deny-all permissions and
+  an allowlisted memory/evolution tool surface.
+- Added guarded skill/support/MCP/plugin/hook management, SHA-256
+  read-before-write, secret/path/link checks, disabled-first MCP fragments, and
+  foreground-only executable activation.
+- Added reversible Hermes-created skill curation and `/learn` /
+  `/hermes-curate` commands.
+- Added YAML frontmatter to every bundled skill so the native OpenCode skill
+  catalog loads them.
+- Replaced the optional upstream example with the current direct snake_case
+  `oh-my-openagent` schema.
+- Reworked project/global installers to preserve existing configs, back up
+  same-named files, skip runtime data, and rely on native plugin discovery.
+- Replaced the unavailable `sql.js` primary path with OpenCode's built-in Bun
+  SQLite runtime and made memory writes/listing observable.
+- Added Bun security tests and expanded repository validation.
+
 ## 2026-06-28 — OpenAgent Controlled Workflow Integration
 
 - Added 11 clean-room rewritten OpenCode agents based on oh-my-openagent public roles.

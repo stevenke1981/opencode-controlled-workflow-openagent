@@ -1,0 +1,23 @@
+{
+  // Spawn an isolated child session after a meaningful turn finishes.
+  "enabled": true,
+  "reviewOnIdle": true,
+  "triggerMode": "signals",
+  "cooldownMs": 60000,
+  "minMessages": 2,
+  "maxTranscriptChars": 18000,
+
+  // Background review may create/update skills and disabled MCP fragments.
+  // Executable plugin/hook writes remain proposals until a foreground user
+  // explicitly promotes them.
+  "allowMcpWrites": true,
+  "allowExecutableWrites": false,
+
+  "curator": {
+    "enabled": true,
+    "intervalHours": 168,
+    "staleAfterDays": 30,
+    "archiveAfterDays": 90,
+    "applyAutomatically": false
+  }
+}
