@@ -1,0 +1,23 @@
+name: Validate OpenCode package
+
+on:
+  push:
+    branches: ["master", "improve/**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Validate repository structure and JSONC
+        run: node scripts/validate.mjs
+      - name: Check shell syntax
+        run: bash -n install.sh
