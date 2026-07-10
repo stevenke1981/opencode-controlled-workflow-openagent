@@ -5,136 +5,145 @@ PROJECT_PATH="${1:-.}"
 SOURCE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TARGET_DIR="$(cd "$PROJECT_PATH" && pwd)"
 TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
+TARGET_CONFIG="$TARGET_DIR/opencode.jsonc"
+SOURCE_CONFIG="$SOURCE_DIR/opencode.jsonc"
+TMP_MERGE_SCRIPT=""
+
+cleanup() {
+  if [ -n "${TMP_MERGE_SCRIPT:-}" ] && [ -f "$TMP_MERGE_SCRIPT" ]; then
+    rm -f "$TMP_MERGE_SCRIPT"
+  fi
+}
+trap cleanup EXIT
 
 echo "Installing OpenCode Controlled Workflow to $TARGET_DIR"
 
-# Self-install guard: if source == target, the repo already has .opencode/ in git
 if [ "$SOURCE_DIR" = "$TARGET_DIR" ]; then
   echo "ℹ️  Source and target are the same directory — skipping file copy."
-  echo "   The .opencode/ directory is already present from git clone."
 else
   if [ -d "$TARGET_DIR/.opencode" ]; then
-    echo "Backing up existing .opencode to $TARGET_DIR/.opencode.backup-$TIMESTAMP"
-    cp -a "$TARGET_DIR/.opencode" "$TARGET_DIR/.opencode.backup-$TIMESTAMP"
+    BACKUP="$TARGET_DIR/.opencode.backup-$TIMESTAMP"
+    echo "Backing up existing .opencode to $BACKUP"
+    cp -a "$TARGET_DIR/.opencode" "$BACKUP"
   fi
 
   cp -a "$SOURCE_DIR/.opencode" "$TARGET_DIR/"
   cp "$SOURCE_DIR/AGENTS.md" "$TARGET_DIR/AGENTS.md"
 fi
 
-# Merge opencode.jsonc: add controlled-workflow plugins if missing
-TARGET_CONFIG="$TARGET_DIR/opencode.jsonc"
-SOURCE_CONFIG="$SOURCE_DIR/opencode.jsonc"
-
-merge_jsonc() {
-  node "$TMP_MERGE_SCRIPT" "$SOURCE_CONFIG" "$TARGET_CONFIG"
-}
-
 if [ -f "$TARGET_CONFIG" ]; then
-  if command -v node &> /dev/null; then
-    # Write merge script to temp file to avoid quoting issues
-    TMP_MERGE_SCRIPT=$(mktemp /tmp/opencode-merge-XXXXXX.js)
-    cat > "$TMP_MERGE_SCRIPT" << 'JSEOF'
-const fs = require('fs');
-const path = require('path');
+  CONFIG_BACKUP="$TARGET_CONFIG.backup-$TIMESTAMP"
+  cp "$TARGET_CONFIG" "$CONFIG_BACKUP"
+  echo "Backed up existing config to $CONFIG_BACKUP"
 
-const [,, sourcePath, targetPath] = process.argv;
+  if ! command -v node >/dev/null 2>&1; then
+    echo "⚠️  node is required to safely merge JSONC."
+    echo "   Existing config was preserved; add these plugins manually:"
+    echo "   - .opencode/plugins/memory-lifecycle.plugin.ts"
+    echo "   - .opencode/plugins/research-learn-loop.plugin.ts"
+  else
+    TMP_MERGE_SCRIPT="$(mktemp "${TMPDIR:-/tmp}/opencode-merge-XXXXXX.js")"
+    cat > "$TMP_MERGE_SCRIPT" <<'JSEOF'
+const fs = require("node:fs");
+const path = require("node:path");
 
-/*
- * Strip JSONC comments (single-line and block) while respecting strings.
- * Uses a state machine to avoid false matches like "https://" inside strings.
- */
-function stripJSONC(s) {
-  let out = '';
-  let inStr = false;
-  let inBlock = false;
-  let i = 0;
-  while (i < s.length) {
-    if (inBlock) {
-      if (s[i] === '*' && s[i + 1] === '/') { inBlock = false; i += 2; }
-      else { i++; }
-    } else if (inStr) {
-      if (s[i] === '\\' && (s[i + 1] === '"' || s[i + 1] === '\\' || s[i + 1] === '/')) {
-        out += s[i] + s[i + 1]; i += 2;
-      } else if (s[i] === '"') { inStr = false; out += s[i]; i++; }
-      else { out += s[i]; i++; }
+const [,, targetPath] = process.argv;
+
+function stripJSONC(input) {
+  let out = "";
+  let inString = false;
+  let inLineComment = false;
+  let inBlockComment = false;
+  let escaped = false;
+
+  for (let i = 0; i < input.length; i++) {
+    const ch = input[i];
+    const next = input[i + 1];
+
+    if (inLineComment) {
+      if (ch === "\n") {
+        inLineComment = false;
+        out += ch;
+      }
+      continue;
+    }
+    if (inBlockComment) {
+      if (ch === "*" && next === "/") {
+        inBlockComment = false;
+        i++;
+      }
+      continue;
+    }
+    if (inString) {
+      out += ch;
+      if (escaped) escaped = false;
+      else if (ch === "\\") escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') {
+      inString = true;
+      out += ch;
+    } else if (ch === "/" && next === "/") {
+      inLineComment = true;
+      i++;
+    } else if (ch === "/" && next === "*") {
+      inBlockComment = true;
+      i++;
     } else {
-      if (s[i] === '/' && s[i + 1] === '/') { i += 2; while (i < s.length && s[i] !== '\n') i++; }
-      else if (s[i] === '/' && s[i + 1] === '*') { i += 2; inBlock = true; }
-      else if (s[i] === '"') { inStr = true; out += s[i]; i++; }
-      else { out += s[i]; i++; }
+      out += ch;
     }
   }
   return out;
 }
 
-const src = fs.readFileSync(sourcePath, 'utf8');
-const tgt = fs.readFileSync(targetPath, 'utf8');
-
-const srcJson = JSON.parse(stripJSONC(src));
-const tgtJson = JSON.parse(stripJSONC(tgt));
-
-// Merge plugins (deduplicate by basename)
-const pluginSet = new Set(tgtJson.plugin || []);
-const pluginFiles = [
-  '.opencode/plugins/memory-lifecycle.plugin.ts',
-  '.opencode/plugins/research-learn-loop.plugin.ts',
+const desired = [
+  ".opencode/plugins/memory-lifecycle.plugin.ts",
+  ".opencode/plugins/research-learn-loop.plugin.ts",
 ];
-pluginFiles.forEach(rel => {
-  if (![...pluginSet].some(x => x.endsWith(path.basename(rel)))) {
-    pluginSet.add(rel);
-  }
-});
-tgtJson.plugin = [...pluginSet];
 
-// Write back
-const out = JSON.stringify(tgtJson, null, 2) + '\n';
-fs.writeFileSync(targetPath, out, 'utf8');
-console.log('✓ Merged plugins into opencode.jsonc');
+const raw = fs.readFileSync(targetPath, "utf8");
+const config = JSON.parse(stripJSONC(raw));
+const plugins = Array.isArray(config.plugin) ? config.plugin.map(String) : [];
+
+for (const plugin of desired) {
+  const basename = path.basename(plugin);
+  if (!plugins.some((entry) => path.basename(entry) === basename)) plugins.push(plugin);
+}
+
+config.plugin = plugins;
+const tempPath = `${targetPath}.tmp-${process.pid}`;
+fs.writeFileSync(tempPath, JSON.stringify(config, null, 2) + "\n", "utf8");
+fs.renameSync(tempPath, targetPath);
+console.log("✓ Safely merged plugins into opencode.jsonc");
 JSEOF
 
-    merge_jsonc
-    rm -f "$TMP_MERGE_SCRIPT"
-  else
-    echo "⚠️  node not found, copying source config as fallback"
-    cp "$SOURCE_CONFIG" "$TARGET_CONFIG"
+    if ! node "$TMP_MERGE_SCRIPT" "$TARGET_CONFIG"; then
+      cp "$CONFIG_BACKUP" "$TARGET_CONFIG"
+      echo "ERROR: Existing opencode.jsonc could not be parsed safely." >&2
+      echo "The original file has been restored. Fix the JSONC and rerun." >&2
+      exit 1
+    fi
   fi
 else
   cp "$SOURCE_CONFIG" "$TARGET_CONFIG"
 fi
 
-# Verify essential files
-TOOLS_DIR="$TARGET_DIR/.opencode/tools"
-LIB_DIR="$TARGET_DIR/.opencode/lib"
-MISSING=""
-for f in "memory.ts"; do
-  if [ ! -f "$TOOLS_DIR/$f" ]; then MISSING="$MISSING TOOL:$f"; fi
+MISSING=()
+for f in \
+  "$TARGET_DIR/.opencode/tools/memory.ts" \
+  "$TARGET_DIR/.opencode/lib/memory-db.ts" \
+  "$TARGET_DIR/.opencode/lib/migrate-to-sqlite.ts" \
+  "$TARGET_DIR/.opencode/plugins/memory-lifecycle.plugin.ts" \
+  "$TARGET_DIR/.opencode/plugins/research-learn-loop.plugin.ts"; do
+  [ -f "$f" ] || MISSING+=("${f#$TARGET_DIR/}")
 done
-for f in "memory-db.ts" "migrate-to-sqlite.ts"; do
-  if [ ! -f "$LIB_DIR/$f" ]; then MISSING="$MISSING LIB:$f"; fi
-done
-if [ -n "$MISSING" ]; then
-  echo "WARNING: Missing files:$MISSING"
-else
-  echo "✓ Tool: memory.ts (self-contained, SQLite/JSON fallback)"
-  echo "✓ Lib:  memory-db.ts, migrate-to-sqlite.ts (in .opencode/lib/, not scanned as tools)"
+
+if [ "${#MISSING[@]}" -gt 0 ]; then
+  printf 'ERROR: Missing required files:\n' >&2
+  printf '  - %s\n' "${MISSING[@]}" >&2
+  exit 1
 fi
 
-echo ""
-echo "✓ Plugins auto-enabled:"
-echo "  - .opencode/plugins/memory-lifecycle.plugin.ts"
-echo "  - .opencode/plugins/research-learn-loop.plugin.ts"
-echo "  Remove entries from opencode.jsonc plugin array to disable."
-echo ""
+echo "✓ Required tools, libraries, and plugins verified."
 echo "Done. Try: opencode run '/controlled-workflow review this repo'"
-
-# Warn about global tools directory contamination
-if [ -f "$HOME/.config/opencode/tools/memory-db.ts" ] || [ -f "$HOME/.config/opencode/tools/memory.ts" ] || [ -f "$HOME/.config/opencode/tools/migrate-to-sqlite.ts" ]; then
-  echo ""
-  echo "⚠️  NOTE: OpenCode also loads .ts files from ~/.config/opencode/tools/."
-  echo "   If you previously copied memory*.ts files there, they may cause"
-  echo "   'Cannot find package sql.js' errors or import resolution failures."
-  echo "   To fix:"
-  echo "     rm -f ~/.config/opencode/tools/memory-db.ts ~/.config/opencode/tools/memory.ts ~/.config/opencode/tools/migrate-to-sqlite.ts"
-  echo "   The correct files are in this project's .opencode/tools/ and .opencode/lib/."
-fi
