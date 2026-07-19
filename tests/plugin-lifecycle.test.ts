@@ -3,6 +3,7 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import HermesPlugin from "../.opencode/plugins/hermes-self-evolution.plugin"
+import ModelAuditPlugin from "../.opencode/plugins/model-audit.plugin"
 import ResearchPlugin from "../.opencode/plugins/research-learn-loop.plugin"
 
 const roots: string[] = []
@@ -40,6 +41,45 @@ describe("OpenCode 1.17 flat SDK lifecycle", () => {
     const config: any = { mcp: {} }
     hooks.config(config)
     expect(config.mcp.manual.enabled).toBe(false)
+  })
+
+  test("model audit records resolved provider, model, effort, agent, and session", async () => {
+    const root = await fixture()
+    const hooks: any = await ModelAuditPlugin({ directory: root, client: {} } as any)
+    await hooks["chat.params"]({
+      sessionID: "session-audit-1",
+      agent: "hephaestus",
+      model: { providerID: "opencode-go", id: "deepseek-v4-flash" },
+      provider: { info: { id: "opencode-go" }, options: {} },
+      message: {
+        agent: "hephaestus",
+        model: {
+          providerID: "opencode-go",
+          modelID: "deepseek-v4-flash",
+          variant: "max",
+        },
+      },
+    }, {
+      temperature: 0,
+      topP: 1,
+      topK: 0,
+      maxOutputTokens: 4096,
+      options: { reasoningEffort: "max", apiKey: "must-not-be-written" },
+    })
+
+    const audit = await readFile(path.join(root, ".opencode", "memory", ".runtime", "model-audit.jsonl"), "utf8")
+    const entry = JSON.parse(audit.trim())
+    expect(entry).toMatchObject({
+      event: "model.resolved",
+      session: "session-audit-1",
+      agent: "hephaestus",
+      provider: "opencode-go",
+      model: "deepseek-v4-flash",
+      effort: "max",
+      effortSource: "options.reasoningEffort",
+      variant: "max",
+    })
+    expect(audit).not.toContain("must-not-be-written")
   })
 
   test("Hermes review dispatches once, finalizes child, then permits the next review", async () => {

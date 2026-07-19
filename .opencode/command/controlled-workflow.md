@@ -13,8 +13,8 @@ Run the complete controlled workflow:
 Use the light team:
 - Explore for repository context.
 - Librarian for external docs.
-- Oracle for architecture/debug/review.
+- Merlin for architecture/debug/review.
 - Hephaestus or Atlas for implementation.
-- Momus for skeptical plan review when risk is high.
+- Solomon for skeptical plan review when risk is high.
 
 Do not stop with incomplete todos. If blocked, state the blocker and the exact decision needed.
