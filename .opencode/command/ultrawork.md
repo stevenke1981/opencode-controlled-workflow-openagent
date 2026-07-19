@@ -4,7 +4,7 @@ Use this for large tasks.
 
 Instructions:
 - Start by splitting the work into independent tracks.
-- Run Explore, Librarian, Oracle, Metis, or Momus in parallel where useful.
+- Run Explore, Librarian, Merlin, Athena, or Solomon in parallel where useful.
 - Use Hephaestus for deep implementation and Atlas for todo progression.
 - Keep a shared evidence log.
 - Verify each track before marking it complete.
