@@ -103,14 +103,18 @@ const ModelAuditPlugin = (async (ctx: any) => {
       try {
         await appendQueued(auditFile, entry)
       } catch (error: any) {
-        await ctx.client?.app?.log?.({
-          body: {
-            service: "model-audit",
-            level: "warn",
-            message: "Unable to append model audit entry",
-            extra: { error: String(error?.message || error) },
-          },
-        }).catch(() => undefined)
+        try {
+          await ctx.client?.app?.log?.({
+            body: {
+              service: "model-audit",
+              level: "warn",
+              message: "Unable to append model audit entry",
+              extra: { error: String(error?.message || error) },
+            },
+          })
+        } catch {
+          // Auditing must never break the model request it observes.
+        }
       }
     },
   }
