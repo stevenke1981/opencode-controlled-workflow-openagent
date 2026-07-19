@@ -16,6 +16,7 @@
   cooldown、stagnation、failure backoff 與 child-session guard。
 - Research → Try → Learn：先查專案記憶，再研究、單一假設試驗、驗證、沉澱。
 - 零外部相依的 Bun SQLite 記憶工具：`memory_search/read/add/list`。
+- Model audit：在每次 LLM 呼叫前記錄實際解析的 provider、model、reasoning effort、agent 與 session。
 - Hermes background review：有意義的回合結束後建立獨立 child session，
   僅允許 memory、skill 與受控 evolution tools。
 - 可新增或更新 skills、MCP fragments、plugin proposals、hook proposals。
@@ -69,15 +70,24 @@ parent session idle
     ├── plugins/
     │   ├── memory-lifecycle.plugin.ts
     │   ├── research-learn-loop.plugin.ts
+    │   ├── model-audit.plugin.ts
     │   └── hermes-self-evolution.plugin.ts
     ├── evolution/
     │   ├── mcp/                # reviewed, disabled-first fragments
     │   └── proposals/          # non-live plugin/hook proposals
-    └── memory/                 # per-project experience database
+    └── memory/                 # per-project experience database + runtime audit
 ```
 
 本地 `.opencode/plugins/*.ts` 由 OpenCode 自動探索，所以 `opencode.jsonc`
 不重複列出相同路徑，避免同一 plugin 執行多次。
+
+Model audit 寫入：
+
+```text
+.opencode/memory/.runtime/model-audit.jsonl
+```
+
+每筆 JSONL 只包含時間、session、agent、provider、model、effort、effort 來源與可用的 variant；不保存 prompt、response、API key、headers 或完整 provider options。
 
 ## 安裝
 
@@ -114,7 +124,7 @@ Linux/macOS/Git Bash：
 
 同名檔案會先備份到目標下的
 `.controlled-workflow-backups/<timestamp>/`。資料庫、WAL、vector index、
-review logs、curator archive/backup 等 runtime artifacts 不會被當成模板複製。
+review logs、model audit、curator archive/backup 等 runtime artifacts 不會被當成模板複製。
 
 安裝或修改 config-time 檔案後，必須完整退出並重新啟動 OpenCode。
 
@@ -176,4 +186,5 @@ OpenCode CLI 會共用 SQLite；診斷指令應逐項執行，不要同時啟動
   Agent 的 `_persist_disabled` 能完全不落盤。因此本實作限制 transcript
   長度、先遮蔽 secret-like 內容，並隔離 tool permissions。
 - Plugin/hook proposal 的啟用仍需要 foreground review 與 OpenCode restart。
+- Model audit 的 effort 取自 `chat.params` 已解析 options；若 provider 沒有提供明確 effort，會記錄 `default` 與 `provider-default`。
 - 此包只對齊上游公開行為與目前 OpenCode API，不宣稱包含上游全部功能。
