@@ -2,7 +2,6 @@
 description: Isolated Hermes reviewer for durable memory, skills, MCP proposals, plugin proposals, hook proposals, and curator dry-runs after meaningful completed turns.
 mode: subagent
 hidden: true
-temperature: 0.1
 permission:
   edit: deny
   bash: deny
