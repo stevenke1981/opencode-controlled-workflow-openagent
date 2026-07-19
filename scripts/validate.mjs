@@ -57,6 +57,7 @@ function stripJSONC(input) {
   ".opencode/plugins/memory-lifecycle.plugin.ts",
   ".opencode/plugins/research-learn-loop.plugin.ts",
   ".opencode/plugins/hermes-self-evolution.plugin.ts",
+  ".opencode/plugins/model-audit.plugin.ts",
   ".opencode/plugins/hermes-self-evolution.config.jsonc",
   ".opencode/agent/hermes-reviewer.md",
   ".opencode/command/learn.md",
@@ -72,6 +73,7 @@ if (exists("opencode.jsonc")) {
   try {
     const config = JSON.parse(stripJSONC(fs.readFileSync(configPath, "utf8")));
     if (!config.default_agent) warnings.push("opencode.jsonc has no default_agent.");
+    if (config.autoupdate !== false) errors.push("opencode.jsonc autoupdate must be false for a controlled, version-pinned workflow.");
     const plugins = Array.isArray(config.plugin) ? config.plugin : [];
     for (const entry of plugins) {
       const spec = Array.isArray(entry) ? entry[0] : entry;
@@ -105,6 +107,7 @@ for (const rel of [
   ".opencode/plugins/memory-lifecycle.plugin.ts",
   ".opencode/plugins/research-learn-loop.plugin.ts",
   ".opencode/plugins/hermes-self-evolution.plugin.ts",
+  ".opencode/plugins/model-audit.plugin.ts",
 ]) {
   if (!exists(rel)) continue;
   const source = read(rel);
@@ -112,6 +115,34 @@ for (const rel of [
   if (/^[ \t]*["']session\.(?:created|idle|compacted)["']\s*:/m.test(source)) {
     errors.push(`Plugin uses obsolete top-level session event hook instead of event(): ${rel}`);
   }
+}
+
+for (const dir of [".opencode/command", ".opencode/commands"]) {
+  if (!exists(dir)) continue;
+  for (const name of fs.readdirSync(path.join(root, dir))) {
+    if (!name.endsWith(".md")) continue;
+    const rel = `${dir}/${name}`;
+    const source = read(rel);
+    if (/\b(?:Oracle|Momus)\b/.test(source)) {
+      errors.push(`Command references retired agent names Oracle/Momus: ${rel}`);
+    }
+  }
+}
+
+if (exists(".opencode/agent/hermes-reviewer.md")) {
+  const source = read(".opencode/agent/hermes-reviewer.md");
+  const meta = frontmatter(".opencode/agent/hermes-reviewer.md");
+  if (meta?.temperature !== undefined || /^temperature\s*:/m.test(source)) {
+    errors.push("hermes-reviewer must not set temperature for a thinking model.");
+  }
+}
+
+if (exists(".opencode/plugins/model-audit.plugin.ts")) {
+  const source = read(".opencode/plugins/model-audit.plugin.ts");
+  for (const required of ['"chat.params"', "session:", "agent:", "provider:", "model:", "effort:"]) {
+    if (!source.includes(required)) errors.push(`model-audit.plugin.ts is missing required audit field/hook: ${required}`);
+  }
+  if (!source.includes("model-audit.jsonl")) errors.push("model-audit.plugin.ts must write the model-audit.jsonl runtime log.");
 }
 
 const optionalUpstream = "optional/oh-my-openagent/oh-my-openagent-controlled.jsonc";
