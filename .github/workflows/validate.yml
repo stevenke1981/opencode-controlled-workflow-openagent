@@ -19,20 +19,7 @@ jobs:
           node-version: "22"
       - uses: oven-sh/setup-bun@v2
       - name: Validate repository structure and JSONC
-        id: repository-validation
-        shell: bash
-        run: |
-          set +e
-          node scripts/validate.mjs 2>&1 | tee validation.log
-          status=${PIPESTATUS[0]}
-          exit "$status"
-      - name: Upload validation failure log
-        if: failure() && steps.repository-validation.outcome == 'failure'
-        uses: actions/upload-artifact@v4
-        with:
-          name: validation-failure-log
-          path: validation.log
-          retention-days: 1
+        run: node scripts/validate.mjs
       - name: Test evolution safety core
         run: bun test tests/evolution-core.test.ts tests/memory-db.test.ts tests/plugin-lifecycle.test.ts
       - name: Check shell syntax
